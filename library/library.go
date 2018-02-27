@@ -3,7 +3,6 @@ package library
 import (
 	"crypto/sha1"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,13 +11,29 @@ import (
 	"bitbucket.org/kleinnic74/photos/domain"
 )
 
+const (
+	defaultDirMode = 0755
+)
+
 type PhotoLibrary interface {
-	Add(photo *domain.Photo)
+	Add(photo *domain.Photo) error
 	FindAll() []domain.Photo
 }
 
 type BasicPhotoLibrary struct {
 	basedir string
+	dirMode os.FileMode
+}
+
+type Location struct {
+	long float64 `json:"long"`
+	lat  float64 `json:"lat"`
+}
+
+type libraryPhoto struct {
+	path      string
+	dateTaken time.Time
+	location  *domain.Coordinates
 }
 
 func NewBasicPhotoLibrary(basedir string) (*BasicPhotoLibrary, error) {
@@ -37,30 +52,57 @@ func NewBasicPhotoLibrary(basedir string) (*BasicPhotoLibrary, error) {
 	}
 	var lib = &BasicPhotoLibrary{
 		basedir: absdir,
+		dirMode: defaultDirMode,
 	}
 	return lib, nil
 }
 
-func (lib *BasicPhotoLibrary) Add(photo *domain.Photo) {
-	targetDir := photo.DateTaken.Format("2006/01/02")
+func (lib *BasicPhotoLibrary) Add(photo *domain.Photo) error {
+	targetDir, name, id := canonicalizeFilename(photo)
+	if err := lib.createDirectory(targetDir); err != nil {
+		return err
+	}
+	if err := lib.addPhotoFile(photo.Path, targetDir, name); err != nil {
+		return err
+	}
+	lb := &libraryPhoto{
+		path: filepath.Join(targetDir, name),
+		dateTaken: photo.DateTaken.UTC(),
+		location: photo.Location
+	}
+	return nil
+}
+
+func (lib *BasicPhotoLibrary) createDirectory(dir string) error {
+	fullpath := filepath.Join(lib.basedir, dir)
+	if info, err := os.Stat(fullpath); err != nil {
+		return os.MkdirAll(fullpath, lib.dirMode)
+	} else if !info.IsDir() {
+		return fmt.Errorf("Error: %s exists but is not a directory", fullpath)
+	} else {
+		return nil
+	}
+}
+
+func (lib *BasicPhotoLibrary) addPhotoFile(path, targetDir, targetName string) error {
+	pathInLib := filepath.Join(lib.basedir, targetDir, targetName)
+	if err := os.Link(path, pathInLib); err != nil {
+		return err
+	}
+	return nil
+}
+
+func idOfPhoto(photo *domain.Photo) string {
 	h := sha1.New()
 	h.Write([]byte(photo.DateTaken.UTC().Format(time.RFC3339)))
 	h.Write([]byte("-"))
 	h.Write([]byte(strings.ToLower(photo.Filename)))
-	name := fmt.Sprintf("%x.%s", h.Sum(nil))
-	pathInLib := filepath.Join(lib.basedir, targetDir, name)
-	dir := filepath.Dir(pathInLib)
-	if info, err := os.Stat(dir); err != nil {
-		err = os.MkdirAll(dir, 0755)
-		if err != nil {
-			log.Printf("Error: cannot create directory %s: %s", dir, err)
-			return
-		}
-	} else if !info.IsDir() {
-		log.Printf("Error: %s is not a directory", dir)
-		return
-	}
-	if err := os.Link(photo.Path, pathInLib); err != nil {
-		log.Printf("Error: cannot link %s to %s: %s", photo.Path, pathInLib, err)
-	}
+	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+func canonicalizeFilename(photo *domain.Photo) (dir, filename, id string) {
+	dir = photo.DateTaken.Format("2006/01/02")
+	id = idOfPhoto(photo)
+	filename = fmt.Sprintf("%s.%s", id, photo.Format)
+	return
 }

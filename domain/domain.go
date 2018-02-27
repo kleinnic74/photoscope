@@ -1,7 +1,7 @@
 package domain
 
 import (
-	"fmt"
+	"io"
 	"os"
 	"time"
 
@@ -11,21 +11,12 @@ import (
 	"github.com/rwcarlsen/goexif/tiff"
 )
 
-type Coordinates struct {
-	lat  float64
-	long float64
-}
-
-func (c Coordinates) String() string {
-	return fmt.Sprintf("[%f;%f]", c.lat, c.long)
-}
-
 type Photo struct {
 	Filename  string
 	Path      string
 	DateTaken time.Time
 	Location  *Coordinates
-	Format    string
+	Format    *Format
 }
 
 type TagHandler func(name, value string)
@@ -63,7 +54,11 @@ func NewPhoto(path string) (*Photo, error) {
 		gps   *Coordinates
 	)
 	filename := filepath.Base(path)
-	format := filepath.Ext(path)
+	format, err := FormatOf(f)
+	if err != nil {
+		return nil, err
+	}
+	f.Seek(0, io.SeekStart)
 
 	meta, err := exif.Decode(f)
 	if err == nil {
