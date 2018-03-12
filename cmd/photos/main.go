@@ -61,7 +61,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("Cannot list photos from %s: %s", basedir, err)
 		}
-		counter := Counter{}
+		counter := Counter{count: 0}
 		err = importer.SkipDir("@eaDir").Walk(
 			NewPhotoHandlerChain().Then(counter.imageFound).Then(lib.Add).Do())
 		if err != nil {

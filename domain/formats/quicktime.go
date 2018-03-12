@@ -146,14 +146,20 @@ func parseAtoms(qt *Quicktime, in io.Reader, parent AtomContainer) error {
 
 func skip(in io.Reader, nb int64) error {
 	var total int64 = 0
-	buf := make([]byte, 4096)
-	for count, err := in.Read(buf); total < nb; count, err = in.Read(buf) {
-		total += int64(count)
-		if total != nb && err != nil {
-			return err
+	switch r := in.(type) {
+	case io.Seeker:
+		_, err := r.Seek(nb, io.SeekCurrent)
+		return err
+	default:
+		buf := make([]byte, 4096)
+		for count, err := in.Read(buf); total < nb; count, err = in.Read(buf) {
+			total += int64(count)
+			if total != nb && err != nil {
+				return err
+			}
 		}
+		return nil
 	}
-	return nil
 }
 
 func parseKeys(qt *Quicktime, in io.Reader, parent AtomContainer) error {
