@@ -13,7 +13,7 @@ type DirectoryImporter struct {
 	skipped map[string]bool
 }
 
-type PhotoHandler func(*domain.Photo)
+type PhotoHandler func(domain.Photo) error
 
 type PhotoHandlerChain struct {
 	handler []PhotoHandler
@@ -31,10 +31,13 @@ func (c *PhotoHandlerChain) Then(h PhotoHandler) *PhotoHandlerChain {
 }
 
 func (c *PhotoHandlerChain) Do() PhotoHandler {
-	return func(p *domain.Photo) {
+	return func(p domain.Photo) error {
 		for _, h := range c.handler {
-			h(p)
+			if err := h(p); err != nil {
+				log.Printf("Photo %s: %s", p.Id(), err)
+			}
 		}
+		return nil
 	}
 }
 

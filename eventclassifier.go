@@ -2,6 +2,7 @@ package main
 
 import (
 	"image"
+	"time"
 
 	"image/draw"
 
@@ -12,25 +13,31 @@ import (
 )
 
 type EventClassifier struct {
-	photos            []*domain.Photo
 	timestampedPhotos []classification.Timestamped
+}
+
+type TimestampedPhoto struct {
+	domain.Photo
+}
+
+func (p *TimestampedPhoto) Timestamp() time.Time {
+	return p.DateTaken()
 }
 
 func NewEventClassifier() *EventClassifier {
 	return &EventClassifier{
-		photos:            make([]*domain.Photo, 0),
 		timestampedPhotos: make([]classification.Timestamped, 0),
 	}
 }
 
-func (c *EventClassifier) Add(p *domain.Photo) {
-	c.photos = append(c.photos, p)
-	c.timestampedPhotos = append(c.timestampedPhotos, p)
+func (c *EventClassifier) Add(p domain.Photo) {
+	tp := &TimestampedPhoto{p}
+	c.timestampedPhotos = append(c.timestampedPhotos, tp)
 }
 
 func (c *EventClassifier) DistanceMatrixToImage() image.Image {
 	kValues := []int{96, 48, 24, 6}
-	size := len(c.photos)
+	size := len(c.timestampedPhotos)
 	img := image.NewRGBA(image.Rect(0, 0, size*len(kValues), size))
 	draw.Draw(img, img.Bounds(), image.White, image.ZP, draw.Src)
 	for n, k := range kValues {

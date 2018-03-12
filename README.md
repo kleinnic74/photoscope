@@ -27,6 +27,7 @@ Current Phase: early prototypes
 Next Phase: more advanced indexing
 
 * temporal event splitting (based on https://www.fxpal.com/publications/temporal-event-clustering-for-digital-photo-collections-2.pdf)
+* duplicate detection
 
 Further away:
 
