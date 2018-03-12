@@ -52,10 +52,24 @@ func (store *BoltStore) Close() {
 	store.db.Close()
 }
 
+func (story *BoltStore) Exists(dateTaken time.Time, id string) bool {
+	key := sortableId(dateTaken, id)
+	var exists bool
+	story.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(PhotosBucket)
+		exists = b.Get(key) != nil
+		return nil
+	})
+	return exists
+}
+
 func (store *BoltStore) Add(p *library.LibraryPhoto) error {
 	id := sortableId(p.DateTaken(), p.Id())
 	return store.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket(PhotosBucket)
+		if existing := b.Get(id); existing != nil {
+			return library.PhotoAlreadyExists
+		}
 		encoded, err := json.Marshal(p)
 		if err != nil {
 			log.Printf("Error: failed to encode photo: %s", err)

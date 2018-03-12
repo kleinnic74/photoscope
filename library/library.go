@@ -19,6 +19,10 @@ const (
 	DbName         = "photos.db"
 )
 
+var (
+	PhotoAlreadyExists error
+)
+
 type PhotoLibrary interface {
 	Add(photo domain.Photo) error
 	FindAll() []domain.Photo
@@ -26,6 +30,7 @@ type PhotoLibrary interface {
 }
 
 type Store interface {
+	Exists(dateTaken time.Time, id string) bool
 	Add(*LibraryPhoto) error
 	FindAll() []*LibraryPhoto
 	Find(start, end time.Time) []*LibraryPhoto
@@ -58,6 +63,10 @@ type LibraryPhoto struct {
 	format    *domain.Format
 	dateTaken time.Time
 	location  gps.Coordinates
+}
+
+func init() {
+	PhotoAlreadyExists = fmt.Errorf("Photo already exists in library")
 }
 
 func (p *LibraryPhoto) Id() string {
@@ -145,6 +154,9 @@ func NewBasicPhotoLibrary(basedir string, store StoreBuilder) (*BasicPhotoLibrar
 
 func (lib *BasicPhotoLibrary) Add(photo domain.Photo) error {
 	targetDir, name, id := canonicalizeFilename(photo)
+	if lib.db.Exists(photo.DateTaken().UTC(), id) {
+		return PhotoAlreadyExists
+	}
 	if err := lib.createDirectory(targetDir); err != nil {
 		return err
 	}
