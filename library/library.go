@@ -1,8 +1,8 @@
 package library
 
 import (
-	"encoding/json"
 	"fmt"
+	"image"
 	"io"
 	"os"
 	"path/filepath"
@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"bitbucket.org/kleinnic74/photos/domain"
-	"bitbucket.org/kleinnic74/photos/domain/gps"
 	"github.com/reusee/mmh3"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -19,12 +19,9 @@ const (
 	DbName         = "photos.db"
 )
 
-var (
-	PhotoAlreadyExists error
-)
-
 type PhotoLibrary interface {
 	Add(photo domain.Photo) error
+	Get(id string) (domain.Photo, error)
 	FindAll() []domain.Photo
 	Find(start, end time.Time) []domain.Photo
 }
@@ -32,6 +29,7 @@ type PhotoLibrary interface {
 type Store interface {
 	Exists(dateTaken time.Time, id string) bool
 	Add(*LibraryPhoto) error
+	Get(id string) (*LibraryPhoto, error)
 	FindAll() []*LibraryPhoto
 	Find(start, end time.Time) []*LibraryPhoto
 }
@@ -49,80 +47,27 @@ type BasicPhotoLibrary struct {
 	photodir string
 	dirMode  os.FileMode
 	db       ClosableStore
+
+	thumbdir    string
+	thumbFormat *domain.Format
 }
 
-type Location struct {
-	long float64 `json:"long"`
-	lat  float64 `json:"lat"`
-}
+type ReaderFunc func() (io.ReadCloser, error)
 
-type LibraryPhoto struct {
-	basedir   string
-	path      string
-	id        string
-	format    *domain.Format
-	dateTaken time.Time
-	location  gps.Coordinates
-}
-
-func init() {
-	PhotoAlreadyExists = fmt.Errorf("Photo already exists in library")
-}
-
-func (p *LibraryPhoto) Id() string {
-	return p.id
-}
-
-func (p *LibraryPhoto) Format() *domain.Format {
-	return p.format
-}
-
-func (p *LibraryPhoto) DateTaken() time.Time {
-	return p.dateTaken
-}
-
-func (p *LibraryPhoto) Location() *gps.Coordinates {
-	return &p.location
-}
-
-func (p *LibraryPhoto) Content() (io.ReadCloser, error) {
-	return os.Open(filepath.Join(p.basedir, p.path))
-}
-
-func (p *LibraryPhoto) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		Path      string           `json:"path"`
-		Id        string           `json:"id"`
-		Format    string           `json:"format"`
-		DateTaken *time.Time       `json:"date"`
-		Location  *gps.Coordinates `json:"gps"`
-	}{
-		Path:      p.path,
-		Id:        p.id,
-		Format:    p.format.Id,
-		DateTaken: &p.dateTaken,
-		Location:  &p.location,
-	})
-}
-
-func (p *LibraryPhoto) UnmarshalJSON(buf []byte) error {
-	data := struct {
-		Path      string          `json:"path"`
-		Id        string          `json:"id"`
-		Format    string          `json:"format"`
-		DateTaken time.Time       `json:"date"`
-		Location  gps.Coordinates `json:"gps"`
-	}{}
-	err := json.Unmarshal(buf, &data)
-	if err != nil {
-		return err
+func wrap(in io.ReadCloser) ReaderFunc {
+	return func() (io.ReadCloser, error) {
+		return in, nil
 	}
-	p.id = data.Id
-	p.format = domain.MustFormatForExt(data.Format)
-	p.path = data.Path
-	p.dateTaken = data.DateTaken
-	p.location = data.Location
-	return nil
+}
+
+// Error to indicate that the photo with the given id does not exist
+func NotFound(id string) error {
+	return fmt.Errorf("No photo with id %s", id)
+}
+
+// Error to indicate that the photo with the given id already exists
+func PhotoAlreadyExists(id string) error {
+	return fmt.Errorf("Photo already exists: id=%s", id)
 }
 
 func NewBasicPhotoLibrary(basedir string, store StoreBuilder) (*BasicPhotoLibrary, error) {
@@ -131,7 +76,7 @@ func NewBasicPhotoLibrary(basedir string, store StoreBuilder) (*BasicPhotoLibrar
 		return nil, err
 	}
 	if info, err := os.Stat(absdir); err != nil {
-		err = os.MkdirAll(absdir, 0755)
+		err = os.MkdirAll(absdir, defaultDirMode)
 		if err != nil {
 			return nil, err
 		}
@@ -148,6 +93,9 @@ func NewBasicPhotoLibrary(basedir string, store StoreBuilder) (*BasicPhotoLibrar
 		photodir: filepath.Join(absdir, "photos"),
 		dirMode:  defaultDirMode,
 		db:       db,
+
+		thumbdir:    filepath.Join(absdir, "thumbs"),
+		thumbFormat: domain.MustFormatForExt("jpg"),
 	}
 	return lib, nil
 }
@@ -155,16 +103,13 @@ func NewBasicPhotoLibrary(basedir string, store StoreBuilder) (*BasicPhotoLibrar
 func (lib *BasicPhotoLibrary) Add(photo domain.Photo) error {
 	targetDir, name, id := canonicalizeFilename(photo)
 	if lib.db.Exists(photo.DateTaken().UTC(), id) {
-		return PhotoAlreadyExists
+		return PhotoAlreadyExists(id)
 	}
-	if err := lib.createDirectory(targetDir); err != nil {
-		return err
-	}
-	if err := lib.addPhotoFile(photo, targetDir, name); err != nil {
+	if err := lib.addPhotoFile(photo.Content, lib.photodir, targetDir, name); err != nil {
 		return err
 	}
 	p := &LibraryPhoto{
-		basedir:   lib.basedir,
+		lib:       lib,
 		path:      filepath.Join(targetDir, name),
 		id:        id,
 		dateTaken: photo.DateTaken().UTC(),
@@ -174,10 +119,19 @@ func (lib *BasicPhotoLibrary) Add(photo domain.Photo) error {
 	return lib.db.Add(p)
 }
 
+func (lib *BasicPhotoLibrary) Get(id string) (domain.Photo, error) {
+	if p, err := lib.db.Get(id); err != nil {
+		return nil, err
+	} else {
+		p.lib = lib
+		return p, err
+	}
+}
+
 func (lib *BasicPhotoLibrary) FindAll() []domain.Photo {
 	var result []domain.Photo = make([]domain.Photo, 0)
 	for _, p := range lib.db.FindAll() {
-		p.basedir = lib.basedir
+		p.lib = lib
 		result = append(result, p)
 	}
 	return result
@@ -186,14 +140,14 @@ func (lib *BasicPhotoLibrary) FindAll() []domain.Photo {
 func (lib *BasicPhotoLibrary) Find(start, end time.Time) []domain.Photo {
 	var result []domain.Photo = make([]domain.Photo, 0)
 	for _, p := range lib.db.Find(start, end) {
-		p.basedir = lib.basedir
+		p.lib = lib
 		result = append(result, p)
 	}
 	return result
 }
 
-func (lib *BasicPhotoLibrary) createDirectory(dir string) error {
-	fullpath := filepath.Join(lib.basedir, dir)
+func (lib *BasicPhotoLibrary) createDirectory(basedir, dir string) error {
+	fullpath := filepath.Join(basedir, dir)
 	if info, err := os.Stat(fullpath); err != nil {
 		return os.MkdirAll(fullpath, lib.dirMode)
 	} else if !info.IsDir() {
@@ -203,23 +157,83 @@ func (lib *BasicPhotoLibrary) createDirectory(dir string) error {
 	}
 }
 
-func (lib *BasicPhotoLibrary) addPhotoFile(photo domain.Photo, targetDir, targetName string) error {
-	content, err := photo.Content()
+func (lib *BasicPhotoLibrary) addPhotoFile(in ReaderFunc, basedir, targetDir, targetName string) error {
+	pathInLib := filepath.Join(basedir, targetDir, targetName)
+	if _, err := os.Stat(pathInLib); err == nil {
+		// File already exists
+		return PhotoAlreadyExists(filepath.Join(targetDir, targetName))
+	}
+	log.Infof("Adding file: %s", pathInLib)
+	err := lib.createDirectory(basedir, targetDir)
 	if err != nil {
 		return err
 	}
-	defer content.Close()
-	pathInLib := filepath.Join(lib.basedir, targetDir, targetName)
-	out, err := os.Create(pathInLib)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-	_, err = io.Copy(out, content)
-	if err != nil {
-		return err
-	}
+	// Does not exist yet, copy in the background
+	go func() {
+		out, err := os.Create(pathInLib)
+		if out != nil {
+			defer out.Close()
+		}
+		if err != nil {
+			log.Errorf("Could not add photo '%s': %s", pathInLib, err)
+			return
+		}
+		content, err := in()
+		if content != nil {
+			defer content.Close()
+		}
+		if err != nil {
+			log.Errorf("Could not read photo content: %s", err)
+			return
+		}
+		_, err = io.Copy(out, content)
+		if err != nil {
+			log.Errorf("Could not copy photo to library '%s': %s", pathInLib, err)
+			return
+		}
+	}()
 	return nil
+}
+
+func (lib *BasicPhotoLibrary) openPhoto(path string) (io.ReadCloser, error) {
+	return os.Open(filepath.Join(lib.photodir, path))
+}
+
+func (lib *BasicPhotoLibrary) openThumb(id string, size domain.ThumbSize) (image.Image, error) {
+	path := filepath.Join(lib.thumbdir, id, size.Name+".jpg")
+	if _, err := os.Stat(path); err != nil {
+		photo, err := lib.Get(id)
+		if err != nil {
+			return nil, err
+		}
+		log.Infof("Creating thumbnail for %s at %s...", id, path)
+		src, err := photo.Image()
+		if err != nil {
+			log.Errorf("Could not read image from %s", err)
+			return nil, err
+		}
+		img, err := domain.Thumbnail(src, size)
+		if err != nil {
+			log.Errorf("Failed to create thumbnail: %s", err)
+			return nil, err
+		}
+		in, out := io.Pipe()
+		go func() {
+			defer out.Close()
+			lib.thumbFormat.Encode(img, out)
+		}()
+		if err = lib.addPhotoFile(wrap(in), lib.thumbdir, id, size.Name+".jpg"); err != nil {
+			log.Errorf("Error while creating thumbnail for %s: %s", id, err)
+		}
+		return img, nil
+	} else {
+		f, err := os.Open(path)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+		return lib.thumbFormat.Decode(f)
+	}
 }
 
 func canonicalizeFilename(photo domain.Photo) (dir, filename, id string) {

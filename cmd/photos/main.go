@@ -4,9 +4,10 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
+
+	log "github.com/sirupsen/logrus"
 
 	"bitbucket.org/kleinnic74/photos/domain"
 	"bitbucket.org/kleinnic74/photos/library"
@@ -21,6 +22,8 @@ var (
 )
 
 func init() {
+	log.SetFormatter(&log.TextFormatter{})
+
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s  <basedir>\n", os.Args[0])
 		flag.PrintDefaults()
@@ -28,7 +31,7 @@ func init() {
 	flag.StringVar(&matrixFilename, "m", "distance.png", "Name of distance matrix file")
 	flag.StringVar(&libDir, "l", "gophotos", "Path to photo library")
 	flag.Parse()
-	basedir := flag.Arg(0)
+	basedir = flag.Arg(0)
 	if basedir == "" {
 		flag.Usage()
 		os.Exit(1)

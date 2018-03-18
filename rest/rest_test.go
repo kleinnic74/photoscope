@@ -61,6 +61,15 @@ func (lib *testLib) Find(start, end time.Time) []domain.Photo {
 	return lib.photos
 }
 
+func (lib *testLib) Get(id string) (domain.Photo, error) {
+	for _, p := range lib.photos {
+		if p.Id() == id {
+			return p, nil
+		}
+	}
+	return nil, library.NotFound(id)
+}
+
 func newPhotoLib() library.PhotoLibrary {
 	return &testLib{photos: make([]domain.Photo, 0)}
 }

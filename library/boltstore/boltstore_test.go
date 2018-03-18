@@ -2,7 +2,6 @@ package boltstore
 
 import (
 	"bytes"
-	"encoding/json"
 	"os"
 	"testing"
 	"time"
@@ -22,13 +21,51 @@ func TestNewStore(t *testing.T) {
 
 func TestAddThenFindAll(t *testing.T) {
 	runTestWithStore(t, func(t *testing.T, db *BoltStore) {
-		photo := randomPhoto()
+		photo := library.RandomPhoto()
 		if err := db.Add(photo); err != nil {
 			t.Fatalf("Failed to add photo: %s", err)
 		}
 		found := db.FindAll()
 		if len(found) != 1 {
 			t.Fatalf("Bad number of photos returned, expected %d, got %d", 1, len(found))
+		}
+	})
+}
+
+func TestAddThenGet(t *testing.T) {
+	runTestWithStore(t, func(t *testing.T, db *BoltStore) {
+		photo := library.RandomPhoto()
+		if err := db.Add(photo); err != nil {
+			t.Fatalf("Failed to add photo: %s", err)
+		}
+		found, err := db.Get(photo.Id())
+		if err != nil {
+			t.Fatalf("Should have found a photo with id %s", photo.Id())
+		}
+		if found == nil {
+			t.Fatalf("Returned nil and nil error, error should habe been NotFound")
+		}
+		assertPhotosAreEqual(t, photo, found)
+	})
+}
+
+func BenchmarkAdd(b *testing.B) {
+	// Initialize store
+	db, err := NewBoltStore("/tmp", "photos.db")
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer func() {
+		db.Close()
+		os.Remove("/tmp/photos.db")
+	}()
+
+	b.Run("Add a photo", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			p := library.RandomPhoto()
+			if err := db.Add(p); err != nil {
+				b.Errorf("Failed to add photo: %s", err)
+			}
 		}
 	})
 }
@@ -89,19 +126,11 @@ func deleteIfExists(t *testing.T, file string) {
 	}
 }
 
-func randomPhoto() *library.LibraryPhoto {
-	var p library.LibraryPhoto
-	data := []byte(`{
-		"path" : "2018/02/23",
-		"id": "123456789",
-		"format": "jpg",
-		"date": "2018-02-23T13:43:12Z",
-		"gps": {
-		   "long": 47.123445,
-		   "lat": 45.12313
-		}}`)
-	if err := json.Unmarshal(data, &p); err != nil {
-		panic(err)
+func assertPhotosAreEqual(t *testing.T, p1, p2 *library.LibraryPhoto) {
+	if (p1 == nil || p2 == nil) && p1 != p2 {
+		t.Errorf("Both should be nil but are not: p1=%s, p2=%s", p1, p2)
 	}
-	return &p
+	if p1.Id() != p2.Id() {
+		t.Errorf("Different Id()s: p1: %s, p2: %s", p1.Id(), p2.Id())
+	}
 }

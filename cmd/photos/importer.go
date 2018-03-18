@@ -1,9 +1,10 @@
 package main
 
 import (
-	"log"
 	"os"
 	"path/filepath"
+
+	log "github.com/sirupsen/logrus"
 
 	"bitbucket.org/kleinnic74/photos/domain"
 )
@@ -46,6 +47,7 @@ func NewDirectoryImporter(dir string) (*DirectoryImporter, error) {
 	if err != nil {
 		return nil, err
 	}
+	log.Infof("DirectoryImporter: dir=%s, absdir=%s", dir, absdir)
 	return &DirectoryImporter{
 		basedir: absdir,
 		skipped: make(map[string]bool),
@@ -58,6 +60,7 @@ func (d *DirectoryImporter) SkipDir(name string) *DirectoryImporter {
 }
 
 func (d *DirectoryImporter) Walk(handler PhotoHandler) error {
+	log.Infof("Importing from basedir=%s", d.basedir)
 	return filepath.Walk(d.basedir, d.loadImage(handler))
 }
 

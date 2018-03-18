@@ -1,6 +1,7 @@
 package gps
 
 import (
+	"encoding/json"
 	"testing"
 )
 
@@ -18,6 +19,19 @@ func TestCoordinatesToISO6709(t *testing.T) {
 		iso := c.ISO6709()
 		if iso != tt.iso {
 			t.Errorf("Bad ISO6709 value, expected %s, got %s", tt.iso, iso)
+		}
+	}
+}
+
+func BenchmarkMNarshalJSON(b *testing.B) {
+	coords := Coordinates{
+		lat:  12.3456,
+		long: 23.2344,
+	}
+	for i := 0; i < b.N; i++ {
+		_, err := json.Marshal(coords)
+		if err != nil {
+			b.Error(err)
 		}
 	}
 }

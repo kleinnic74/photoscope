@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"image"
 	"io"
 	"log"
 	"os"
@@ -9,8 +10,6 @@ import (
 	"path/filepath"
 
 	"bitbucket.org/kleinnic74/photos/domain/gps"
-	"github.com/rwcarlsen/goexif/exif"
-	"github.com/rwcarlsen/goexif/tiff"
 )
 
 type MediaMetaData struct {
@@ -22,6 +21,9 @@ type Photo interface {
 	Id() string
 	Format() *Format
 	Content() (io.ReadCloser, error)
+	Image() (image.Image, error)
+	Thumb(ThumbSize) (image.Image, error)
+
 	DateTaken() time.Time
 	Location() *gps.Coordinates
 }
@@ -32,30 +34,6 @@ type photoFile struct {
 	dateTaken time.Time
 	format    *Format
 	location  *gps.Coordinates
-}
-
-type TagHandler func(name, value string)
-
-type exifWalker struct {
-	w TagHandler
-}
-
-func (w *exifWalker) Walk(name exif.FieldName, tag *tiff.Tag) error {
-	w.w(string(name), tag.String())
-	return nil
-}
-
-func PrintExif(path string, walker func(name, value string)) error {
-	f, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	meta, err := exif.Decode(f)
-	if err != nil {
-		return err
-	}
-	return meta.Walk(&exifWalker{w: walker})
 }
 
 func NewPhoto(path string) (Photo, error) {
@@ -121,6 +99,28 @@ func (p *photoFile) Format() *Format {
 
 func (p *photoFile) Location() *gps.Coordinates {
 	return p.location
+}
+
+func (p *photoFile) Image() (image.Image, error) {
+	in, err := p.Content()
+	if err != nil {
+		return nil, err
+	}
+	defer in.Close()
+	return p.format.Decode(in)
+}
+
+func (p *photoFile) Thumb(size ThumbSize) (image.Image, error) {
+	content, err := p.Content()
+	if err != nil {
+		return nil, err
+	}
+	defer content.Close()
+	img, err := p.format.Decode(content)
+	if err != nil {
+		return nil, err
+	}
+	return Thumbnail(img, size)
 }
 
 func (p *photoFile) Content() (io.ReadCloser, error) {

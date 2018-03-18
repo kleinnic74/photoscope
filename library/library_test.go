@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"bitbucket.org/kleinnic74/photos/domain"
+	"bitbucket.org/kleinnic74/photos/domain/gps"
 )
 
 func TestMarshalJSON(t *testing.T) {
@@ -29,6 +30,17 @@ func TestMarshalJSON(t *testing.T) {
 	assertEquals(t, "path", "2018/02/03", p.path)
 	assertEquals(t, "id", "12345678", p.id)
 	assertEquals(t, "gps.lat", "[45.123130;47.123445]", p.location.String())
+}
+
+func BenchmarkMarshalJSON(b *testing.B) {
+	photo := RandomPhoto()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := json.Marshal(photo)
+		if err != nil {
+			b.Error(err)
+		}
+	}
 }
 
 func TestCanonicalizePhoto(t *testing.T) {
@@ -73,7 +85,7 @@ func at(year, month, day string) time.Time {
 	return t
 }
 
-func somewhere() domain.Coordinates {
-	return domain.NewCoordinates((rand.Float64()-0.5)*360,
+func somewhere() gps.Coordinates {
+	return gps.NewCoordinates((rand.Float64()-0.5)*360,
 		(rand.Float64()-0.5)*90)
 }

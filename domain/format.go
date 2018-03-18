@@ -2,7 +2,10 @@ package domain
 
 import (
 	"fmt"
+	"image"
+	"image/jpeg"
 	"io"
+	"log"
 
 	"github.com/h2non/filetype"
 	"github.com/rwcarlsen/goexif/exif"
@@ -17,17 +20,21 @@ const (
 )
 
 type metaDataReader func(io.Reader, *MediaMetaData) error
+type photoDecoder func(io.Reader) (image.Image, error)
+type photoEncoder func(image.Image, io.Writer)
 
 type Format struct {
 	Type       uint8
 	Id         string
 	Mime       string
 	metaReader metaDataReader
+	decoder    photoDecoder
+	encoder    photoEncoder
 }
 
 var (
 	allFormats = []*Format{
-		&Format{Type: Picture, Id: "jpg", Mime: "image/jpeg", metaReader: exifReader},
+		&Format{Type: Picture, Id: "jpg", Mime: "image/jpeg", metaReader: exifReader, decoder: jpeg.Decode, encoder: jpegEncode},
 		&Format{Type: Video, Id: "mov", Mime: "video/quicktime", metaReader: quicktimeReader},
 	}
 
@@ -75,6 +82,14 @@ func (f *Format) DecodeMetaData(in io.Reader, meta *MediaMetaData) error {
 	return nil
 }
 
+func (f *Format) Decode(in io.Reader) (image.Image, error) {
+	return f.decoder(in)
+}
+
+func (f *Format) Encode(img image.Image, out io.Writer) {
+	f.encoder(img, out)
+}
+
 func exifReader(in io.Reader, meta *MediaMetaData) error {
 	ex, err := exif.Decode(in)
 	if err != nil {
@@ -98,4 +113,10 @@ func quicktimeReader(in io.Reader, meta *MediaMetaData) error {
 	meta.DateTaken = qt.DateTaken()
 	meta.Location = qt.Location()
 	return nil
+}
+
+func jpegEncode(img image.Image, out io.Writer) {
+	if err := jpeg.Encode(out, img, nil); err != nil {
+		log.Printf("Error while encoding to jpeg: %s", err)
+	}
 }

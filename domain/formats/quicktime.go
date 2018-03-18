@@ -4,10 +4,11 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"log"
 	"regexp"
 	"strconv"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 
 	"bitbucket.org/kleinnic74/photos/domain/gps"
 )
@@ -115,10 +116,10 @@ func (qt *Quicktime) setMetaDataAsString(key, value string) {
 	if found {
 		err := metaParser(qt, key, value)
 		if err != nil {
-			log.Printf("Could not parse meta-data %s: %s", key, err)
+			log.Warnf("Could not parse meta-data %s: %s", key, err)
 		}
 	} else {
-		log.Printf("  Ignored meta-data %s=%s (no parser defined)", key, value)
+		log.Debugf("  Ignored meta-data %s=%s (no parser defined)", key, value)
 	}
 }
 

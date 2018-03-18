@@ -18,6 +18,7 @@ import (
 
 var (
 	PhotosBucket = []byte("photos")
+	IdMapBucket  = []byte("idmap")
 )
 
 type BoltStore struct {
@@ -30,6 +31,10 @@ func NewBoltStore(basedir string, name string) (library.ClosableStore, error) {
 		return nil, err
 	}
 	if err = createBucket(db, PhotosBucket); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err = createBucket(db, IdMapBucket); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -65,17 +70,22 @@ func (story *BoltStore) Exists(dateTaken time.Time, id string) bool {
 
 func (store *BoltStore) Add(p *library.LibraryPhoto) error {
 	id := sortableId(p.DateTaken(), p.Id())
+	encoded, err := json.Marshal(p)
+	if err != nil {
+		log.Printf("Error: failed to encode photo: %s", err)
+		return err
+	}
 	return store.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket(PhotosBucket)
 		if existing := b.Get(id); existing != nil {
-			return library.PhotoAlreadyExists
-		}
-		encoded, err := json.Marshal(p)
-		if err != nil {
-			log.Printf("Error: failed to encode photo: %s", err)
-			return err
+			return library.PhotoAlreadyExists(p.Id())
 		}
 		err = b.Put(id, encoded)
+		if err != nil {
+			return err
+		}
+		b = tx.Bucket(IdMapBucket)
+		err = b.Put([]byte(p.Id()), id)
 		return err
 	})
 }
@@ -125,6 +135,30 @@ func (store *BoltStore) Find(start, end time.Time) []*library.LibraryPhoto {
 	}
 	log.Printf("Entries found: %d", len(found))
 	return found
+}
+
+// Returns the photo with the given id
+func (store *BoltStore) Get(id string) (*library.LibraryPhoto, error) {
+	var found *library.LibraryPhoto
+	return found, store.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(IdMapBucket)
+		internalId := b.Get([]byte(id))
+		if internalId == nil {
+			return library.NotFound(id)
+		}
+		var photo library.LibraryPhoto
+		b = tx.Bucket(PhotosBucket)
+		if data := b.Get(internalId); data != nil {
+			if err := json.Unmarshal(data, &photo); err != nil {
+				log.Printf("Error: could not unmarshal photo: %s", err)
+				return err
+			}
+			found = &photo
+			return nil
+		} else {
+			return library.NotFound(id)
+		}
+	})
 }
 
 func sortableId(ts time.Time, filename string) []byte {

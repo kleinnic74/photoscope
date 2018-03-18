@@ -14,11 +14,13 @@ type Coordinates struct {
 	long float64
 }
 
+type jsonCoordinates struct {
+	Lat  float64 `json:"lat"`
+	Long float64 `json:"long"`
+}
+
 func (gps *Coordinates) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		Lat  float64 `json:"lat"`
-		Long float64 `json:"long"`
-	}{
+	return json.Marshal(jsonCoordinates{
 		Lat:  gps.lat,
 		Long: gps.long,
 	})
