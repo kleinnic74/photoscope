@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"image"
+	"io"
 	"log"
 	"net/http"
 	"time"
@@ -17,6 +18,7 @@ var (
 	jpg = domain.MustFormatForExt("jpg")
 )
 
+// App is the REST API that can be used as an http.HandlerFunc
 type App struct {
 	router *mux.Router
 	lib    library.PhotoLibrary
@@ -29,7 +31,7 @@ func logging() middleware {
 		return func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 			defer func() {
-				log.Printf("%s %s", r.URL.Path, time.Since(start))
+				log.Printf("%s %s %s", r.Method, r.URL.Path, time.Since(start))
 			}()
 			f(w, r)
 		}
@@ -43,13 +45,15 @@ func chain(f http.HandlerFunc, middlewares ...middleware) http.HandlerFunc {
 	return f
 }
 
+// NewApp creates a new instance of the REST application
+// as an http.HandlerFunc
 func NewApp(lib library.PhotoLibrary) (a *App) {
 	a = &App{router: mux.NewRouter(), lib: lib}
 	a.route("/photos/{id}", a.getPhoto).Methods("GET")
+	a.route("/photos/{id}/view", a.getPhotoImage).Methods("GET")
 	a.route("/photos", a.getPhotos).Methods("GET")
 	a.route("/thumb/{id}", a.getThumb).Methods("GET")
 	return a
-
 }
 
 func (a *App) route(path string, f http.HandlerFunc) *mux.Route {
@@ -80,6 +84,27 @@ func (a *App) getPhoto(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, photo)
 }
 
+func (a *App) getPhotoImage(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+	photo, err := a.lib.Get(id)
+	if photo == nil && err == nil {
+		respondWithError(w, http.StatusNotFound, fmt.Errorf("No photo with id %s", id))
+		return
+	}
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, err)
+		return
+	}
+	imgReader, err := photo.Content()
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, err)
+		return
+	}
+	defer imgReader.Close()
+	respondWithBinary(w, photo.Format().Mime, photo.SizeInBytes(), imgReader)
+}
+
 func (a *App) getThumb(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
@@ -92,13 +117,13 @@ func (a *App) getThumb(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusInternalServerError, err)
 		return
 	}
-	if t, err := photo.Thumb(domain.Small); err != nil {
+	t, err := photo.Thumb(domain.Small)
+	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, err)
 		return
-	} else {
-		respondWithImage(w, jpg, t)
-		return
 	}
+	respondWithImage(w, jpg, t)
+	return
 }
 
 func respondWithError(w http.ResponseWriter, status int, err error) {
@@ -110,6 +135,13 @@ func respondWithJSON(w http.ResponseWriter, status int, payload interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	w.Write(response)
+}
+
+func respondWithBinary(w http.ResponseWriter, mime string, size int64, data io.Reader) {
+	w.Header().Set("Content-Type", mime)
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", size))
+	w.WriteHeader(http.StatusOK)
+	io.Copy(w, data)
 }
 
 func respondWithImage(w http.ResponseWriter, format *domain.Format, image image.Image) {

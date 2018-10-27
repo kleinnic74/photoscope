@@ -16,23 +16,25 @@ import (
 )
 
 var (
-	basedir        string
+	importdir      string
 	matrixFilename string
 	libDir         string
+	port           uint
 )
 
 func init() {
 	log.SetFormatter(&log.TextFormatter{})
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s  <basedir>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s  <importdir>\n", os.Args[0])
 		flag.PrintDefaults()
 	}
-	flag.StringVar(&matrixFilename, "m", "distance.png", "Name of distance matrix file")
+	// flag.StringVar(&matrixFilename, "m", "distance.png", "Name of distance matrix file")
 	flag.StringVar(&libDir, "l", "gophotos", "Path to photo library")
+	flag.UintVar(&port, "p", 8080, "HTTP server port")
 	flag.Parse()
-	basedir = flag.Arg(0)
-	if basedir == "" {
+	importdir = flag.Arg(0)
+	if importdir == "" {
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -48,6 +50,7 @@ func (c *Counter) imageFound(img domain.Photo) error {
 	return nil
 }
 
+// Total returns the number of items found
 func (c *Counter) Total() int {
 	return c.count
 }
@@ -60,9 +63,9 @@ func main() {
 		log.Fatal(err)
 	}
 	go func() {
-		importer, err := NewDirectoryImporter(basedir)
+		importer, err := NewDirectoryImporter(importdir)
 		if err != nil {
-			log.Fatalf("Cannot list photos from %s: %s", basedir, err)
+			log.Fatalf("Cannot list photos from %s: %s", importdir, err)
 		}
 		counter := Counter{count: 0}
 		err = importer.SkipDir("@eaDir").Walk(
@@ -74,14 +77,14 @@ func main() {
 	}()
 
 	app := rest.NewApp(lib)
-	http.ListenAndServe(":8080", app)
+	http.ListenAndServe(fmt.Sprintf(":%d", port), app)
 
-	//	img := classifier.DistanceMatrixToImage()
-	//	log.Printf("Creating time-distance matrix image %s", matrixFilename)
-	//	out, err := os.Create(matrixFilename)
-	//	if err != nil {
-	//		log.Fatalf("Could not create distance matrix: %s", err)
-	//	}
-	//	defer out.Close()
-	//	png.Encode(out, img)
+	// img := classifier.DistanceMatrixToImage()
+	// log.Printf("Creating time-distance matrix image %s", matrixFilename)
+	// out, err := os.Create(matrixFilename)
+	// if err != nil {
+	// 	log.Fatalf("Could not create distance matrix: %s", err)
+	// }
+	// defer out.Close()
+	// png.Encode(out, img)
 }

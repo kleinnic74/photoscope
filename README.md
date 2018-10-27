@@ -16,12 +16,12 @@ Provides the back end as REST service in Golang and the front-end as an HTML app
 Current Phase: early prototypes
 
 * basic photo indexing capabilities:
-** import photos
-** extract time and location meta-data
-** index by time, by location
+    * import photos
+    * extract time and location meta-data
+    * index by time, by location
 * HTML browser
-** browse index
-** view photos
+    * browse index
+    * view photos
 
 
 Next Phase: more advanced indexing

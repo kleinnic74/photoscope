@@ -15,7 +15,9 @@ import (
 )
 
 const (
+	// Picture is the Format type value for pictures (or images)
 	Picture = iota
+	// Video is the Format type value for videos
 	Video
 )
 
@@ -61,6 +63,8 @@ func MustFormatForExt(ext string) *Format {
 	return f
 }
 
+// FormatOf returns the format of the image in the given reader. Calling
+// this function will consume the reader
 func FormatOf(r io.Reader) (*Format, error) {
 	header := make([]byte, 500)
 	r.Read(header)
@@ -75,6 +79,8 @@ func FormatOf(r io.Reader) (*Format, error) {
 	}
 }
 
+// DecodeMetaData will decode meta-data as per this format from the given
+// reader and store it in the given metadata instance
 func (f *Format) DecodeMetaData(in io.Reader, meta *MediaMetaData) error {
 	if f.metaReader != nil {
 		return f.metaReader(in, meta)
@@ -82,10 +88,12 @@ func (f *Format) DecodeMetaData(in io.Reader, meta *MediaMetaData) error {
 	return nil
 }
 
+// Decode decodes the binary data from the given reader as an image in this format
 func (f *Format) Decode(in io.Reader) (image.Image, error) {
 	return f.decoder(in)
 }
 
+// Encode encodes this image in the current format into the given writer
 func (f *Format) Encode(img image.Image, out io.Writer) {
 	f.encoder(img, out)
 }

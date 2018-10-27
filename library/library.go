@@ -60,12 +60,12 @@ func wrap(in io.ReadCloser) ReaderFunc {
 	}
 }
 
-// Error to indicate that the photo with the given id does not exist
+// NotFound Error to indicate that the photo with the given id does not exist
 func NotFound(id string) error {
 	return fmt.Errorf("No photo with id %s", id)
 }
 
-// Error to indicate that the photo with the given id already exists
+// PhotoAlreadyExists Error to indicate that the photo with the given id already exists
 func PhotoAlreadyExists(id string) error {
 	return fmt.Errorf("Photo already exists: id=%s", id)
 }
@@ -197,6 +197,14 @@ func (lib *BasicPhotoLibrary) addPhotoFile(in ReaderFunc, basedir, targetDir, ta
 
 func (lib *BasicPhotoLibrary) openPhoto(path string) (io.ReadCloser, error) {
 	return os.Open(filepath.Join(lib.photodir, path))
+}
+
+func (lib *BasicPhotoLibrary) fileSizeOf(path string) int64 {
+	info, err := os.Stat(filepath.Join(lib.photodir, path))
+	if err != nil {
+		return -1
+	}
+	return info.Size()
 }
 
 func (lib *BasicPhotoLibrary) openThumb(id string, size domain.ThumbSize) (image.Image, error) {

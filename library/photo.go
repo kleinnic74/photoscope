@@ -16,6 +16,7 @@ import (
 type LibraryPhoto struct {
 	lib       *BasicPhotoLibrary
 	path      string
+	size      int64
 	id        string
 	format    *domain.Format
 	dateTaken time.Time
@@ -40,6 +41,13 @@ func (p *LibraryPhoto) Location() *gps.Coordinates {
 
 func (p *LibraryPhoto) Content() (io.ReadCloser, error) {
 	return p.lib.openPhoto(p.path)
+}
+
+func (p *LibraryPhoto) SizeInBytes() int64 {
+	if p.size == -1 {
+		p.size = p.lib.fileSizeOf(p.path)
+	}
+	return p.size
 }
 
 func (p *LibraryPhoto) Image() (image.Image, error) {
@@ -85,6 +93,7 @@ func (p *LibraryPhoto) UnmarshalJSON(buf []byte) error {
 	p.id = data.Id
 	p.format = domain.MustFormatForExt(data.Format)
 	p.path = data.Path
+	p.size = -1
 	p.dateTaken = time.Unix(data.DateTaken/1e9, data.DateTaken%1e9)
 	p.location = data.Location
 	return nil

@@ -12,17 +12,20 @@ import (
 	"bitbucket.org/kleinnic74/photos/domain/gps"
 )
 
+// MediaMetaData contains meta-information about a media object
 type MediaMetaData struct {
 	DateTaken time.Time
 	Location  *gps.Coordinates
 }
 
+// Photo represents one image in a media library
 type Photo interface {
 	Id() string
 	Format() *Format
-	Content() (io.ReadCloser, error)
+	SizeInBytes() int64
+	Content() (img io.ReadCloser, err error)
 	Image() (image.Image, error)
-	Thumb(ThumbSize) (image.Image, error)
+	Thumb(ThumbSize) (img image.Image, err error)
 
 	DateTaken() time.Time
 	Location() *gps.Coordinates
@@ -31,12 +34,18 @@ type Photo interface {
 type photoFile struct {
 	filename  string
 	path      string
+	size      int64
 	dateTaken time.Time
 	format    *Format
 	location  *gps.Coordinates
 }
 
+// NewPhoto creates a new Photo instance from the image file at the given path
 func NewPhoto(path string) (Photo, error) {
+	fileinfo, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -47,35 +56,41 @@ func NewPhoto(path string) (Photo, error) {
 		return nil, err
 	}
 	f.Seek(0, io.SeekStart)
-	meta := guessMeta(path)
+	meta := guessMeta(fileinfo)
 	if err = format.DecodeMetaData(f, meta); err != nil {
 		log.Printf("  Error while decoding meta-data: %s", err)
 	}
 	return &photoFile{
 		filename:  filenameFromPath(path),
 		path:      path,
+		size:      fileinfo.Size(),
 		dateTaken: meta.DateTaken,
 		location:  meta.Location,
 		format:    format,
 	}, nil
 }
 
-func guessMeta(path string) *MediaMetaData {
-	fileinfo, _ := os.Stat(path)
+func guessMeta(fileinfo os.FileInfo) *MediaMetaData {
 	return &MediaMetaData{
 		DateTaken: fileinfo.ModTime(),
 		Location:  gps.Unknown,
 	}
 }
 
-func NewPhotoFromFields(path string, taken time.Time, location gps.Coordinates, format string) Photo {
+func NewPhotoFromFields(path string, taken time.Time, location gps.Coordinates, format string) (Photo, error) {
+	fullpath := filenameFromPath(path)
+	var size int64 = -1
+	if fileinfo, err := os.Stat(fullpath); err == nil {
+		size = fileinfo.Size()
+	}
 	return &photoFile{
-		filename:  filenameFromPath(path),
+		filename:  fullpath,
 		path:      path,
+		size:      size,
 		dateTaken: taken,
 		location:  &location,
 		format:    MustFormatForExt(format),
-	}
+	}, nil
 }
 
 func filenameFromPath(path string) string {
@@ -125,4 +140,8 @@ func (p *photoFile) Thumb(size ThumbSize) (image.Image, error) {
 
 func (p *photoFile) Content() (io.ReadCloser, error) {
 	return os.Open(p.path)
+}
+
+func (p *photoFile) SizeInBytes() int64 {
+	return p.size
 }
