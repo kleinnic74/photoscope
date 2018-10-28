@@ -36,8 +36,8 @@ func assertExpected(t *testing.T, expected *PhotoData, actual photos.Photo) {
 	if expected.Date != actualDateTaken {
 		t.Errorf("Bad value for DateTaken: got %s, expected %s", actualDateTaken, expected.Date)
 	}
-	if expected.Id != actual.Id() {
-		t.Errorf("Bad value for Id: got %s, expected %s", actual.Id(), expected.Id)
+	if expected.Id != actual.ID() {
+		t.Errorf("Bad value for Id: got %s, expected %s", actual.ID(), expected.Id)
 	}
 }
 

@@ -57,13 +57,17 @@ func (lib *testLib) FindAll() []domain.Photo {
 	return lib.photos
 }
 
+func (lib *testLib) FindAllPaged(start, max uint) []domain.Photo {
+	return lib.photos
+}
+
 func (lib *testLib) Find(start, end time.Time) []domain.Photo {
 	return lib.photos
 }
 
 func (lib *testLib) Get(id string) (domain.Photo, error) {
 	for _, p := range lib.photos {
-		if p.Id() == id {
+		if p.ID() == id {
 			return p, nil
 		}
 	}

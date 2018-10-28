@@ -22,7 +22,7 @@ func TestMarshalJSON(t *testing.T) {
 		   "lat": 45.12313
 		}
 	}`)
-	var p LibraryPhoto
+	var p Photo
 	if err := json.Unmarshal(data, &p); err != nil {
 		t.Fatalf("Failed to Unmarshal JSON: %s", err)
 	}

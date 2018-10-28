@@ -20,7 +20,7 @@ type MediaMetaData struct {
 
 // Photo represents one image in a media library
 type Photo interface {
-	Id() string
+	ID() string
 	Format() *Format
 	SizeInBytes() int64
 	Content() (img io.ReadCloser, err error)
@@ -77,20 +77,16 @@ func guessMeta(fileinfo os.FileInfo) *MediaMetaData {
 	}
 }
 
-func NewPhotoFromFields(path string, taken time.Time, location gps.Coordinates, format string) (Photo, error) {
+func NewPhotoFromFields(path string, taken time.Time, location gps.Coordinates, format string) Photo {
 	fullpath := filenameFromPath(path)
-	var size int64 = -1
-	if fileinfo, err := os.Stat(fullpath); err == nil {
-		size = fileinfo.Size()
-	}
 	return &photoFile{
 		filename:  fullpath,
 		path:      path,
-		size:      size,
+		size:      0,
 		dateTaken: taken,
 		location:  &location,
 		format:    MustFormatForExt(format),
-	}, nil
+	}
 }
 
 func filenameFromPath(path string) string {
@@ -100,7 +96,7 @@ func filenameFromPath(path string) string {
 	return filename
 }
 
-func (p *photoFile) Id() string {
+func (p *photoFile) ID() string {
 	return p.filename
 }
 

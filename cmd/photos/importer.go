@@ -35,7 +35,7 @@ func (c *PhotoHandlerChain) Do() PhotoHandler {
 	return func(p domain.Photo) error {
 		for _, h := range c.handler {
 			if err := h(p); err != nil {
-				log.Printf("Photo %s: %s", p.Id(), err)
+				log.Printf("Photo %s: %s", p.ID(), err)
 			}
 		}
 		return nil

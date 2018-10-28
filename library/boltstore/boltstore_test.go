@@ -3,17 +3,23 @@ package boltstore
 import (
 	"bytes"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"bitbucket.org/kleinnic74/photos/library"
 )
 
+const (
+	dbpath = "test"
+	dbfile = "photos.db"
+)
+
 type TestFunc func(*testing.T, *BoltStore)
 
 func TestNewStore(t *testing.T) {
 	runTestWithStore(t, func(t *testing.T, db *BoltStore) {
-		if _, err := os.Stat("/tmp/photos.db"); err != nil {
+		if _, err := os.Stat(filepath.Join(dbpath, dbfile)); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -38,12 +44,12 @@ func TestAddThenGet(t *testing.T) {
 		if err := db.Add(photo); err != nil {
 			t.Fatalf("Failed to add photo: %s", err)
 		}
-		found, err := db.Get(photo.Id())
+		found, err := db.Get(photo.ID())
 		if err != nil {
-			t.Fatalf("Should have found a photo with id %s", photo.Id())
+			t.Fatalf("Should have found a photo with id %s", photo.ID())
 		}
 		if found == nil {
-			t.Fatalf("Returned nil and nil error, error should habe been NotFound")
+			t.Fatalf("Returned nil and nil error, error should have been NotFound")
 		}
 		assertPhotosAreEqual(t, photo, found)
 	})
@@ -51,7 +57,7 @@ func TestAddThenGet(t *testing.T) {
 
 func BenchmarkAdd(b *testing.B) {
 	// Initialize store
-	db, err := NewBoltStore("/tmp", "photos.db")
+	db, err := NewBoltStore(dbpath, dbfile)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -85,8 +91,8 @@ func TestByteOrderOfId(t *testing.T) {
 		if tK.Before(tKm1) {
 			t.Fatalf("Bad time stamp order, ts[%d] is before ts[%d]", k+1, k)
 		}
-		idK := sortableId(tK, v.filename)
-		idKm1 := sortableId(tKm1, data[k].filename)
+		idK := sortableID(tK, v.filename)
+		idKm1 := sortableID(tKm1, data[k].filename)
 		if bytes.Compare(idK, idKm1) <= 0 {
 			t.Errorf("Bad byte order, id[%d] is lower than id[%d] (%s <= %s)", k+1, k, tK, tKm1)
 		}
@@ -94,10 +100,12 @@ func TestByteOrderOfId(t *testing.T) {
 }
 
 func runTestWithStore(t *testing.T, test TestFunc) {
-	deleteIfExists(t, "/tmp/photos.db")
-	defer deleteIfExists(t, "/tmp/photos.db")
+	fullpath := filepath.Join(dbpath, dbfile)
+	deleteIfExists(t, fullpath)
+	defer deleteIfExists(t, fullpath)
+	os.Mkdir(dbpath, 0755)
 	func(t *testing.T) {
-		db, err := NewBoltStore("/tmp", "photos.db")
+		db, err := NewBoltStore(dbpath, dbfile)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -106,7 +114,7 @@ func runTestWithStore(t *testing.T, test TestFunc) {
 		case *BoltStore:
 			test(t, boltStore)
 		default:
-			t.Fatal("Bad type: %s", boltStore)
+			t.Fatalf("Bad type: %s", boltStore)
 		}
 	}(t)
 }
@@ -126,11 +134,11 @@ func deleteIfExists(t *testing.T, file string) {
 	}
 }
 
-func assertPhotosAreEqual(t *testing.T, p1, p2 *library.LibraryPhoto) {
+func assertPhotosAreEqual(t *testing.T, p1, p2 *library.Photo) {
 	if (p1 == nil || p2 == nil) && p1 != p2 {
 		t.Errorf("Both should be nil but are not: p1=%s, p2=%s", p1, p2)
 	}
-	if p1.Id() != p2.Id() {
-		t.Errorf("Different Id()s: p1: %s, p2: %s", p1.Id(), p2.Id())
+	if p1.ID() != p2.ID() {
+		t.Errorf("Different Id()s: p1: %s, p2: %s", p1.ID(), p2.ID())
 	}
 }

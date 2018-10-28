@@ -16,32 +16,39 @@ import (
 
 const (
 	defaultDirMode = 0755
-	DbName         = "photos.db"
+	dbName         = "photos.db"
 )
 
+// PhotoLibrary represents the operations on a library of photos
 type PhotoLibrary interface {
 	Add(photo domain.Photo) error
 	Get(id string) (domain.Photo, error)
 	FindAll() []domain.Photo
+	FindAllPaged(start, maxCount uint) []domain.Photo
 	Find(start, end time.Time) []domain.Photo
 }
 
+// Store represents a persistent storage of photo meta-data
 type Store interface {
 	Exists(dateTaken time.Time, id string) bool
-	Add(*LibraryPhoto) error
-	Get(id string) (*LibraryPhoto, error)
-	FindAll() []*LibraryPhoto
-	Find(start, end time.Time) []*LibraryPhoto
+	Add(*Photo) error
+	Get(id string) (*Photo, error)
+	FindAll() []*Photo
+	FindAllPaged(start, maxCount uint) []*Photo
+	Find(start, end time.Time) []*Photo
 }
 
+// ClosableStore is a Store that can be closed
 type ClosableStore interface {
 	Store
 
 	Close()
 }
 
+// StoreBuilder function to create a store at the given directory with the given name
 type StoreBuilder func(string, string) (ClosableStore, error)
 
+// BasicPhotoLibrary is a library storing photos on the filesystem
 type BasicPhotoLibrary struct {
 	basedir  string
 	photodir string
@@ -52,6 +59,7 @@ type BasicPhotoLibrary struct {
 	thumbFormat *domain.Format
 }
 
+// ReaderFunc is a function providing an io.ReadCloser
 type ReaderFunc func() (io.ReadCloser, error)
 
 func wrap(in io.ReadCloser) ReaderFunc {
@@ -70,6 +78,7 @@ func PhotoAlreadyExists(id string) error {
 	return fmt.Errorf("Photo already exists: id=%s", id)
 }
 
+// NewBasicPhotoLibrary creates a new photo library at the given directory using the given meta-data store provider function
 func NewBasicPhotoLibrary(basedir string, store StoreBuilder) (*BasicPhotoLibrary, error) {
 	absdir, err := filepath.Abs(basedir)
 	if err != nil {
@@ -84,7 +93,7 @@ func NewBasicPhotoLibrary(basedir string, store StoreBuilder) (*BasicPhotoLibrar
 		err = fmt.Errorf("%s exists but is not a directory", absdir)
 		return nil, err
 	}
-	db, err := store(absdir, DbName)
+	db, err := store(absdir, dbName)
 	if err != nil {
 		return nil, err
 	}
@@ -100,6 +109,8 @@ func NewBasicPhotoLibrary(basedir string, store StoreBuilder) (*BasicPhotoLibrar
 	return lib, nil
 }
 
+// Add adds a photo to this library. If the given photo already exists, then
+// an error of type PhotoAlreadyExists is returned
 func (lib *BasicPhotoLibrary) Add(photo domain.Photo) error {
 	targetDir, name, id := canonicalizeFilename(photo)
 	if lib.db.Exists(photo.DateTaken().UTC(), id) {
@@ -108,7 +119,7 @@ func (lib *BasicPhotoLibrary) Add(photo domain.Photo) error {
 	if err := lib.addPhotoFile(photo.Content, lib.photodir, targetDir, name); err != nil {
 		return err
 	}
-	p := &LibraryPhoto{
+	p := &Photo{
 		lib:       lib,
 		path:      filepath.Join(targetDir, name),
 		id:        id,
@@ -119,17 +130,19 @@ func (lib *BasicPhotoLibrary) Add(photo domain.Photo) error {
 	return lib.db.Add(p)
 }
 
+// Get returns the photo with the given ID
 func (lib *BasicPhotoLibrary) Get(id string) (domain.Photo, error) {
-	if p, err := lib.db.Get(id); err != nil {
+	p, err := lib.db.Get(id)
+	if err != nil {
 		return nil, err
-	} else {
-		p.lib = lib
-		return p, err
 	}
+	p.lib = lib
+	return p, err
 }
 
+// FindAll returns all photos from the underlying store
 func (lib *BasicPhotoLibrary) FindAll() []domain.Photo {
-	var result []domain.Photo = make([]domain.Photo, 0)
+	var result = make([]domain.Photo, 0)
 	for _, p := range lib.db.FindAll() {
 		p.lib = lib
 		result = append(result, p)
@@ -137,8 +150,21 @@ func (lib *BasicPhotoLibrary) FindAll() []domain.Photo {
 	return result
 }
 
+// FindAllPaged returns maximum maxCount photos from the underlying store starting
+// at start index
+func (lib *BasicPhotoLibrary) FindAllPaged(start, maxCount uint) []domain.Photo {
+	var result = make([]domain.Photo, 0)
+	for _, p := range lib.db.FindAllPaged(start, maxCount) {
+		p.lib = lib
+		result = append(result, p)
+	}
+	return result
+}
+
+// Find returns all photos stored in this library that have been taken between
+// the given start and end times
 func (lib *BasicPhotoLibrary) Find(start, end time.Time) []domain.Photo {
-	var result []domain.Photo = make([]domain.Photo, 0)
+	var result = make([]domain.Photo, 0)
 	for _, p := range lib.db.Find(start, end) {
 		p.lib = lib
 		result = append(result, p)
@@ -234,19 +260,19 @@ func (lib *BasicPhotoLibrary) openThumb(id string, size domain.ThumbSize) (image
 			log.Errorf("Error while creating thumbnail for %s: %s", id, err)
 		}
 		return img, nil
-	} else {
-		f, err := os.Open(path)
-		if err != nil {
-			return nil, err
-		}
-		defer f.Close()
-		return lib.thumbFormat.Decode(f)
 	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return lib.thumbFormat.Decode(f)
+
 }
 
 func canonicalizeFilename(photo domain.Photo) (dir, filename, id string) {
 	dir = photo.DateTaken().Format("2006/01/02")
-	filename = fmt.Sprintf("%s.%s", photo.Id(), photo.Format().Id)
+	filename = fmt.Sprintf("%s.%s", photo.ID(), photo.Format().Id)
 	h := mmh3.New128()
 	h.Write([]byte(photo.DateTaken().Format(time.RFC3339)))
 	h.Write([]byte(strings.ToLower(filename)))

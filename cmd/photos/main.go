@@ -45,7 +45,7 @@ type Counter struct {
 }
 
 func (c *Counter) imageFound(img domain.Photo) error {
-	log.Printf("Found photo: %s [%s]- Taken on: %s at %s", img.Id(), img.Format().Id, img.DateTaken(), img.Location())
+	log.Printf("Found photo: %s [%s]- Taken on: %s at %s", img.ID(), img.Format().Id, img.DateTaken(), img.Location())
 	c.count++
 	return nil
 }

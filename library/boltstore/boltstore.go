@@ -1,4 +1,5 @@
-// boltstore.go
+// Package boltstore is an implementation of a library meta-data index
+// using BoltDB for storing data persistently
 package boltstore
 
 import (
@@ -17,24 +18,26 @@ import (
 )
 
 var (
-	PhotosBucket = []byte("photos")
-	IdMapBucket  = []byte("idmap")
+	photosBucket = []byte("photos")
+	idMapBucket  = []byte("idmap")
 )
 
+// BoltStore uses BoltDB as the storage implementation to store data about photos
 type BoltStore struct {
 	db *bolt.DB
 }
 
+// NewBoltStore creates a new BoltStore at the given location with the given name
 func NewBoltStore(basedir string, name string) (library.ClosableStore, error) {
 	db, err := bolt.Open(filepath.Join(basedir, name), 0600, nil)
 	if err != nil {
 		return nil, err
 	}
-	if err = createBucket(db, PhotosBucket); err != nil {
+	if err = createBucket(db, photosBucket); err != nil {
 		db.Close()
 		return nil, err
 	}
-	if err = createBucket(db, IdMapBucket); err != nil {
+	if err = createBucket(db, idMapBucket); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -53,52 +56,68 @@ func createBucket(db *bolt.DB, name []byte) error {
 	})
 }
 
+// Close closes this store
 func (store *BoltStore) Close() {
 	store.db.Close()
 }
 
-func (story *BoltStore) Exists(dateTaken time.Time, id string) bool {
-	key := sortableId(dateTaken, id)
+// Exists checks if a photo with the given id on the given date exists in this store
+func (store *BoltStore) Exists(dateTaken time.Time, id string) bool {
+	key := sortableID(dateTaken, id)
 	var exists bool
-	story.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket(PhotosBucket)
+	store.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(photosBucket)
 		exists = b.Get(key) != nil
 		return nil
 	})
 	return exists
 }
 
-func (store *BoltStore) Add(p *library.LibraryPhoto) error {
-	id := sortableId(p.DateTaken(), p.Id())
+// Add adds the given photo to this store
+func (store *BoltStore) Add(p *library.Photo) error {
+	id := sortableID(p.DateTaken(), p.ID())
 	encoded, err := json.Marshal(p)
 	if err != nil {
 		log.Printf("Error: failed to encode photo: %s", err)
 		return err
 	}
 	return store.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket(PhotosBucket)
+		b := tx.Bucket(photosBucket)
 		if existing := b.Get(id); existing != nil {
-			return library.PhotoAlreadyExists(p.Id())
+			return library.PhotoAlreadyExists(p.ID())
 		}
 		err = b.Put(id, encoded)
 		if err != nil {
 			return err
 		}
-		b = tx.Bucket(IdMapBucket)
-		err = b.Put([]byte(p.Id()), id)
+		b = tx.Bucket(idMapBucket)
+		err = b.Put([]byte(p.ID()), id)
 		return err
 	})
 }
 
-func (store *BoltStore) FindAll() []*library.LibraryPhoto {
-	var found []*library.LibraryPhoto = make([]*library.LibraryPhoto, 0)
+// FindAll returns all photos in this store
+func (store *BoltStore) FindAll() []*library.Photo {
+	return store.findRange(func(c Cursor) Cursor {
+		return c
+	})
+}
+
+//FindAllPaged returns at most max photos from the store starting at photo index start
+func (store *BoltStore) FindAllPaged(start, max uint) []*library.Photo {
+	return store.findRange(func(c Cursor) Cursor {
+		return c.Skip(start).Limit(max)
+	})
+}
+
+func (store *BoltStore) findRange(f func(Cursor) Cursor) []*library.Photo {
+	var found = make([]*library.Photo, 0)
 
 	err := store.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket(PhotosBucket)
-		c := b.Cursor()
-
+		b := tx.Bucket(photosBucket)
+		c := f(newForwardCursor(b.Cursor()))
 		for k, v := c.First(); k != nil; k, v = c.Next() {
-			var photo library.LibraryPhoto
+			var photo library.Photo
 			if err := json.Unmarshal(v, &photo); err != nil {
 				log.Printf("Error: could not unmarshal photo: %s", err)
 				return err
@@ -113,15 +132,16 @@ func (store *BoltStore) FindAll() []*library.LibraryPhoto {
 	return found
 }
 
-func (store *BoltStore) Find(start, end time.Time) []*library.LibraryPhoto {
-	var found []*library.LibraryPhoto = make([]*library.LibraryPhoto, 0)
-	min, max := boundaryIds(start, end)
+// Find returns all photos in this library between the given time instants
+func (store *BoltStore) Find(start, end time.Time) []*library.Photo {
+	var found = make([]*library.Photo, 0)
+	min, max := boundaryIDs(start, end)
 	err := store.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket(PhotosBucket)
+		b := tx.Bucket(photosBucket)
 		c := b.Cursor()
 
 		for k, v := c.Seek(min); k != nil && bytes.Compare(k, max) <= 0; k, v = c.Next() {
-			var photo library.LibraryPhoto
+			var photo library.Photo
 			if err := json.Unmarshal(v, &photo); err != nil {
 				log.Printf("Error: could not unmarshal photo: %s", err)
 				return err
@@ -133,35 +153,31 @@ func (store *BoltStore) Find(start, end time.Time) []*library.LibraryPhoto {
 	if err != nil {
 		log.Printf("Could not read photos: %s", err)
 	}
-	log.Printf("Entries found: %d", len(found))
 	return found
 }
 
-// Returns the photo with the given id
-func (store *BoltStore) Get(id string) (*library.LibraryPhoto, error) {
-	var found *library.LibraryPhoto
+// Get returns the photo with the given id
+func (store *BoltStore) Get(id string) (*library.Photo, error) {
+	var found *library.Photo
 	return found, store.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket(IdMapBucket)
-		internalId := b.Get([]byte(id))
-		if internalId == nil {
+		internalID := tx.Bucket(idMapBucket).Get([]byte(id))
+		if internalID == nil {
 			return library.NotFound(id)
 		}
-		var photo library.LibraryPhoto
-		b = tx.Bucket(PhotosBucket)
-		if data := b.Get(internalId); data != nil {
+		var photo library.Photo
+		if data := tx.Bucket(photosBucket).Get(internalID); data != nil {
 			if err := json.Unmarshal(data, &photo); err != nil {
 				log.Printf("Error: could not unmarshal photo: %s", err)
 				return err
 			}
 			found = &photo
 			return nil
-		} else {
-			return library.NotFound(id)
 		}
+		return library.NotFound(id)
 	})
 }
 
-func sortableId(ts time.Time, filename string) []byte {
+func sortableID(ts time.Time, filename string) []byte {
 	var id bytes.Buffer
 	id.Write([]byte(ts.UTC().Format(time.RFC3339)))
 	h := mmh3.New32()
@@ -170,7 +186,7 @@ func sortableId(ts time.Time, filename string) []byte {
 	return id.Bytes()
 }
 
-func boundaryIds(begin, end time.Time) (low, high []byte) {
+func boundaryIDs(begin, end time.Time) (low, high []byte) {
 	var lbuf bytes.Buffer
 	lbuf.Write([]byte(begin.UTC().Format(time.RFC3339)))
 	lbuf.Write([]byte{0, 0, 0, 0})
