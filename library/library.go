@@ -240,26 +240,38 @@ func (lib *BasicPhotoLibrary) openThumb(id string, size domain.ThumbSize) (image
 		if err != nil {
 			return nil, err
 		}
-		log.Infof("Creating thumbnail for %s at %s...", id, path)
-		src, err := photo.Image()
-		if err != nil {
-			log.Errorf("Could not read image from %s", err)
-			return nil, err
-		}
-		img, err := domain.Thumbnail(src, size)
-		if err != nil {
-			log.Errorf("Failed to create thumbnail: %s", err)
-			return nil, err
-		}
-		in, out := io.Pipe()
+		ch := make(chan image.Image)
+		errch := make(chan error)
 		go func() {
+			defer close(ch)
+			defer close(errch)
+			log.Infof("Creating thumbnail for %s at %s...", id, path)
+			src, err := photo.Image()
+			if err != nil {
+				log.Errorf("Could not read image from %s", err)
+				errch <- err
+				return
+			}
+			img, err := domain.Thumbnail(src, size)
+			if err != nil {
+				log.Errorf("Failed to create thumbnail: %s", err)
+				errch <- err
+				return
+			}
+			ch <- img
+			in, out := io.Pipe()
 			defer out.Close()
-			lib.thumbFormat.Encode(img, out)
+			go lib.thumbFormat.Encode(img, out)
+			if err = lib.addPhotoFile(wrap(in), lib.thumbdir, id, size.Name+".jpg"); err != nil {
+				log.Errorf("Error while creating thumbnail for %s: %s", id, err)
+			}
 		}()
-		if err = lib.addPhotoFile(wrap(in), lib.thumbdir, id, size.Name+".jpg"); err != nil {
-			log.Errorf("Error while creating thumbnail for %s: %s", id, err)
+		select {
+		case img := <-ch:
+			return img, nil
+		case err := <-errch:
+			return nil, err
 		}
-		return img, nil
 	}
 	f, err := os.Open(path)
 	if err != nil {
