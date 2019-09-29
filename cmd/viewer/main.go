@@ -10,6 +10,10 @@ import (
 	"github.com/go-gl/glfw/v3.2/glfw"
 )
 
+const (
+	fpsTarget = 60
+)
+
 var (
 	square = []float32{
 		// Point        // Texture coords
@@ -39,13 +43,22 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
 	lp := program.Link()
 	scene := opengl.NewScene()
 	scene.Add(opengl.MakeVao(square, 5))
+
+	w, h := window.GetSize()
+	camera := opengl.NewOrthoCamera(w, h)
+	fps := opengl.NewFps(fpsTarget)
 	for !window.ShouldClose() {
+		fps.BeginFrame()
+		lp.Use()
+		lp.SetMat4("projection", camera.Projection())
 		texture.BindTexture()
 		draw(scene, window, lp)
 		lp = program.UpdateModifiedShaders()
+		fps.EndFrame()
 	}
 }
 
@@ -82,6 +95,6 @@ func initOpenGL() *opengl.Program {
 func draw(scene opengl.Drawable, window *glfw.Window, program *opengl.LinkedProgram) {
 	program.Use()
 	scene.Draw()
-	glfw.PollEvents()
 	window.SwapBuffers()
+	glfw.PollEvents()
 }

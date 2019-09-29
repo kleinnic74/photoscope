@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-gl/mathgl/mgl32"
+
 	"github.com/go-gl/gl/v4.2-core/gl"
 )
 
@@ -16,6 +18,8 @@ type Program struct {
 	prog    uint32
 	shaders []*Shader
 }
+
+type Uniform uint32
 
 // NewProgram creates a new OpenGL program
 func NewProgram() *Program {
@@ -145,4 +149,10 @@ type LinkedProgram Program
 // Use uses this program in the current OpenGL context
 func (p *LinkedProgram) Use() {
 	gl.UseProgram(p.prog)
+}
+
+func (p *LinkedProgram) SetMat4(name string, mat4 mgl32.Mat4) {
+	m4 := [16]float32(mat4)
+	id := gl.GetUniformLocation(p.prog, gl.Str(name+"\x00"))
+	gl.UniformMatrix4fv(id, 1, false, &m4[0])
 }
