@@ -5,6 +5,7 @@ import (
 	"image/draw"
 
 	// Register PNG image type
+	"image/jpeg"
 	_ "image/png"
 	"log"
 	"os"
@@ -21,6 +22,10 @@ type Texture struct {
 	lastModified time.Time
 }
 
+func init() {
+	log.Printf("Default JPEG quality: %#v", jpeg.DefaultQuality)
+}
+
 // LoadTexture loads a texture from the given image file
 func LoadTexture(path string) (*Texture, error) {
 	log.Printf("Loading texture from '%s'...", path)
@@ -32,6 +37,7 @@ func LoadTexture(path string) (*Texture, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer f.Close()
 	img, _, err := image.Decode(f)
 	if err != nil {
 		return nil, err

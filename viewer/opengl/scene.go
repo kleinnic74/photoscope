@@ -1,7 +1,5 @@
 package opengl
 
-import "github.com/go-gl/gl/v4.2-core/gl"
-
 // Drawable can be drawn into the current context
 type Drawable interface {
 	Draw()
@@ -20,7 +18,6 @@ func (s *Scene) Add(o Drawable) {
 }
 
 func (s *Scene) Draw() {
-	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 	for _, o := range s.objects {
 		o.Draw()
 	}
