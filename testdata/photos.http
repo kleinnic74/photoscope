@@ -1,0 +1,4 @@
+@baseurl=http://localhost:8080
+
+GET {{baseurl}}/photos HTTP/1.1
+

@@ -3,6 +3,8 @@ package gps
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCoordinatesToISO6709(t *testing.T) {
@@ -21,6 +23,19 @@ func TestCoordinatesToISO6709(t *testing.T) {
 			t.Errorf("Bad ISO6709 value, expected %s, got %s", tt.iso, iso)
 		}
 	}
+}
+
+func TestMarshalUnmarshalJSON(t *testing.T) {
+	coords := NewCoordinates(12, 34)
+	data, err := json.Marshal(&coords)
+	if err != nil {
+		t.Errorf("Failed to marshalJSON: %s", err)
+	}
+	var result Coordinates
+	if err = json.Unmarshal(data, &result); err != nil {
+		t.Errorf("Failed to unmarshalJSON: %s", err)
+	}
+	assert.Equal(t, coords, result)
 }
 
 func BenchmarkMNarshalJSON(b *testing.B) {

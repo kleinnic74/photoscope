@@ -1,0 +1,21 @@
+@baseurl=http://localhost:8080
+
+# Create import task
+POST {{baseurl}}/tasks
+Content-Type: application/json
+
+{
+    "type": "import",
+    "parameters": {
+        "dryrun": false,
+        "importdir":"C:\\Users\\nclkl\\go\\src\\bitbucket.org\\kleinnic74\\photos\\testdata"
+    }
+}
+
+
+###############################
+# Fetch list of tasks
+GET {{baseurl}}/tasks
+
+
+#

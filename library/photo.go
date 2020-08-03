@@ -7,6 +7,7 @@ import (
 	"image"
 	"io"
 	"math/rand"
+	"path/filepath"
 	"time"
 
 	"bitbucket.org/kleinnic74/photos/domain"
@@ -18,7 +19,7 @@ type Photo struct {
 	path      string
 	size      int64
 	id        string
-	format    *domain.Format
+	format    domain.Format
 	dateTaken time.Time
 	location  gps.Coordinates
 }
@@ -27,7 +28,11 @@ func (p *Photo) ID() string {
 	return p.id
 }
 
-func (p *Photo) Format() *domain.Format {
+func (p *Photo) Name() string {
+	return filepath.Base(p.path)
+}
+
+func (p *Photo) Format() domain.Format {
 	return p.format
 }
 
@@ -58,21 +63,17 @@ func (p *Photo) Image() (image.Image, error) {
 	return p.format.Decode(content)
 }
 
-func (p *Photo) Thumb(size domain.ThumbSize) (image.Image, error) {
-	return p.lib.openThumb(p.id, size)
-}
-
 func (p *Photo) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
+	return json.Marshal(&struct {
 		Path      string          `json:"path"`
 		ID        string          `json:"id"`
 		Format    string          `json:"format"`
-		DateTaken int64           `json:"dateUN"`
-		Location  gps.Coordinates `json:"gps"`
+		DateTaken int64           `json:"dateUN,omitempty"`
+		Location  gps.Coordinates `json:"gps,omitempty"`
 	}{
 		Path:      p.path,
 		ID:        p.id,
-		Format:    p.format.Id,
+		Format:    p.format.ID(),
 		DateTaken: p.dateTaken.UnixNano(),
 		Location:  p.location,
 	})

@@ -3,7 +3,6 @@ package domain
 import (
 	"image"
 	"io"
-	"log"
 	"os"
 	"time"
 
@@ -11,6 +10,11 @@ import (
 
 	"bitbucket.org/kleinnic74/photos/domain/gps"
 )
+
+// Identifiable represents any object that can be uniquely identified with an string ID
+type Identifiable interface {
+	ID() string
+}
 
 // MediaMetaData contains meta-information about a media object
 type MediaMetaData struct {
@@ -20,12 +24,12 @@ type MediaMetaData struct {
 
 // Photo represents one image in a media library
 type Photo interface {
-	ID() string
-	Format() *Format
+	Identifiable
+	Name() string
+	Format() Format
 	SizeInBytes() int64
 	Content() (img io.ReadCloser, err error)
 	Image() (image.Image, error)
-	Thumb(ThumbSize) (img image.Image, err error)
 
 	DateTaken() time.Time
 	Location() *gps.Coordinates
@@ -36,7 +40,7 @@ type photoFile struct {
 	path      string
 	size      int64
 	dateTaken time.Time
-	format    *Format
+	format    Format
 	location  *gps.Coordinates
 }
 
@@ -58,7 +62,7 @@ func NewPhoto(path string) (Photo, error) {
 	f.Seek(0, io.SeekStart)
 	meta := guessMeta(fileinfo)
 	if err = format.DecodeMetaData(f, meta); err != nil {
-		log.Printf("  Error while decoding meta-data: %s", err)
+		return nil, err
 	}
 	return &photoFile{
 		filename:  filenameFromPath(path),
@@ -100,11 +104,15 @@ func (p *photoFile) ID() string {
 	return p.filename
 }
 
+func (p *photoFile) Name() string {
+	return p.filename
+}
+
 func (p *photoFile) DateTaken() time.Time {
 	return p.dateTaken
 }
 
-func (p *photoFile) Format() *Format {
+func (p *photoFile) Format() Format {
 	return p.format
 }
 
@@ -121,18 +129,18 @@ func (p *photoFile) Image() (image.Image, error) {
 	return p.format.Decode(in)
 }
 
-func (p *photoFile) Thumb(size ThumbSize) (image.Image, error) {
-	content, err := p.Content()
-	if err != nil {
-		return nil, err
-	}
-	defer content.Close()
-	img, err := p.format.Decode(content)
-	if err != nil {
-		return nil, err
-	}
-	return Thumbnail(img, size)
-}
+// func (p *photoFile) Thumb(size ThumbSize) (image.Image, error) {
+// 	content, err := p.Content()
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	defer content.Close()
+// 	img, err := p.format.Decode(content)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return Thumbnail(img, size)
+// }
 
 func (p *photoFile) Content() (io.ReadCloser, error) {
 	return os.Open(p.path)

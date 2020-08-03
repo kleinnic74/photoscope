@@ -2,6 +2,7 @@ package domain
 
 import (
 	"image"
+	"io"
 
 	"github.com/nfnt/resize"
 )
@@ -13,10 +14,14 @@ var (
 )
 
 type ThumbSize struct {
-	long uint
-	Name string
+	width uint
+	Name  string
 }
 
-func Thumbnail(img image.Image, size ThumbSize) (image.Image, error) {
-	return resize.Resize(size.long, 0, img, resize.NearestNeighbor), nil
+func imageResizer(format Format, in io.Reader, size ThumbSize) (image.Image, error) {
+	image, err := format.Decode(in)
+	if err != nil {
+		return nil, err
+	}
+	return resize.Resize(size.width, 0, image, resize.NearestNeighbor), nil
 }

@@ -1,11 +1,11 @@
 package domain
 
 import (
+	"errors"
 	"fmt"
 	"image"
 	"image/jpeg"
 	"io"
-	"log"
 
 	"github.com/h2non/filetype"
 	"github.com/rwcarlsen/goexif/exif"
@@ -14,48 +14,80 @@ import (
 	"bitbucket.org/kleinnic74/photos/domain/gps"
 )
 
+type MediaType uint8
+
 const (
 	// Picture is the Format type value for pictures (or images)
-	Picture = iota
+	Picture = MediaType(iota)
 	// Video is the Format type value for videos
-	Video
+	Video = MediaType(iota)
 )
 
 type metaDataReader func(io.Reader, *MediaMetaData) error
 type photoDecoder func(io.Reader) (image.Image, error)
-type photoEncoder func(image.Image, io.Writer)
+type photoEncoder func(image.Image, io.Writer) error
+type thumbCreator func(Format, io.Reader, ThumbSize) (image.Image, error)
 
-type Format struct {
-	Type       uint8
-	Id         string
-	Mime       string
+type Format interface {
+	Type() MediaType
+	ID() string
+	Mime() string
+	DecodeMetaData(in io.Reader, meta *MediaMetaData) error
+	Decode(in io.Reader) (image.Image, error)
+	Encode(img image.Image, out io.Writer) error
+	Thumb(in io.ReadCloser, size ThumbSize) (image.Image, error)
+}
+
+type formatImpl struct {
+	typeID     MediaType
+	id         string
+	mime       string
 	metaReader metaDataReader
 	decoder    photoDecoder
 	encoder    photoEncoder
+	thumber    thumbCreator
+}
+
+type ErrThumbsNotSupported string
+
+func (e ErrThumbsNotSupported) Error() string {
+	return fmt.Sprintf("No thumbs available for %s", string(e))
 }
 
 var (
-	allFormats = []*Format{
-		&Format{Type: Picture, Id: "jpg", Mime: "image/jpeg", metaReader: exifReader, decoder: jpeg.Decode, encoder: jpegEncode},
-		&Format{Type: Video, Id: "mov", Mime: "video/quicktime", metaReader: quicktimeReader},
-	}
+	formatsById map[string]Format = map[string]Format{}
 
-	formatsById map[string]*Format
+	ErrNoDecoderAvailable = errors.New("No decoder available for this format")
+	ErrNoEncoderAvailable = errors.New("No encoder available for this format")
 )
 
 func init() {
-	formatsById = make(map[string]*Format)
-	for _, f := range allFormats {
-		formatsById[f.Id] = f
+	RegisterFormat(Picture, "jpg", "image/jpeg", exifReader, jpeg.Decode, jpegEncode, imageResizer)
+	RegisterFormat(Video, "mov", "video/quicktime", quicktimeReader, nil, nil, nil)
+}
+
+func RegisterFormat(typeID MediaType, extension string, mime string,
+	metaReader metaDataReader,
+	decoder photoDecoder,
+	encoder photoEncoder,
+	thumber thumbCreator) {
+	formatsById[extension] = formatImpl{
+		typeID:     typeID,
+		id:         extension,
+		mime:       mime,
+		metaReader: metaReader,
+		decoder:    decoder,
+		encoder:    encoder,
+		thumber:    thumber,
 	}
 }
 
-func FormatForExt(ext string) (*Format, bool) {
+func FormatForExt(ext string) (Format, bool) {
 	f, found := formatsById[ext]
 	return f, found
 }
 
-func MustFormatForExt(ext string) *Format {
+func MustFormatForExt(ext string) Format {
 	f, found := formatsById[ext]
 	if !found {
 		panic(fmt.Errorf("Unkown format with extension '%s'", ext))
@@ -65,7 +97,7 @@ func MustFormatForExt(ext string) *Format {
 
 // FormatOf returns the format of the image in the given reader. Calling
 // this function will consume the reader
-func FormatOf(r io.Reader) (*Format, error) {
+func FormatOf(r io.Reader) (Format, error) {
 	header := make([]byte, 500)
 	r.Read(header)
 	kind, err := filetype.Match(header)
@@ -79,9 +111,29 @@ func FormatOf(r io.Reader) (*Format, error) {
 	}
 }
 
+func (f formatImpl) Type() MediaType {
+	return f.typeID
+}
+
+func (f formatImpl) ID() string {
+	return f.id
+}
+
+func (f formatImpl) Mime() string {
+	return f.mime
+}
+
+func (f formatImpl) Thumb(in io.ReadCloser, size ThumbSize) (image.Image, error) {
+	defer in.Close()
+	if f.thumber == nil {
+		return nil, ErrThumbsNotSupported(f.id)
+	}
+	return f.thumber(f, in, size)
+}
+
 // DecodeMetaData will decode meta-data as per this format from the given
 // reader and store it in the given metadata instance
-func (f *Format) DecodeMetaData(in io.Reader, meta *MediaMetaData) error {
+func (f formatImpl) DecodeMetaData(in io.Reader, meta *MediaMetaData) error {
 	if f.metaReader != nil {
 		return f.metaReader(in, meta)
 	}
@@ -89,13 +141,19 @@ func (f *Format) DecodeMetaData(in io.Reader, meta *MediaMetaData) error {
 }
 
 // Decode decodes the binary data from the given reader as an image in this format
-func (f *Format) Decode(in io.Reader) (image.Image, error) {
+func (f formatImpl) Decode(in io.Reader) (image.Image, error) {
+	if f.decoder == nil {
+		return nil, ErrNoDecoderAvailable
+	}
 	return f.decoder(in)
 }
 
 // Encode encodes this image in the current format into the given writer
-func (f *Format) Encode(img image.Image, out io.Writer) {
-	f.encoder(img, out)
+func (f formatImpl) Encode(img image.Image, out io.Writer) error {
+	if f.encoder == nil {
+		return ErrNoEncoderAvailable
+	}
+	return f.encoder(img, out)
 }
 
 func exifReader(in io.Reader, meta *MediaMetaData) error {
@@ -123,8 +181,6 @@ func quicktimeReader(in io.Reader, meta *MediaMetaData) error {
 	return nil
 }
 
-func jpegEncode(img image.Image, out io.Writer) {
-	if err := jpeg.Encode(out, img, nil); err != nil {
-		log.Printf("Error while encoding to jpeg: %s", err)
-	}
+func jpegEncode(img image.Image, out io.Writer) error {
+	return jpeg.Encode(out, img, nil)
 }

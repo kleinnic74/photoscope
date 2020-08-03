@@ -23,8 +23,8 @@ func TestFormatById(t *testing.T) {
 		if !found {
 			t.Errorf("Expected format for ext %s, but returned nothing", i.t)
 		}
-		if actual.Id != i.expExt {
-			t.Errorf("Bad extension for %s: Expectetd %s, got %s", i.t, i.expExt, actual.Id)
+		if actual.ID() != i.expExt {
+			t.Errorf("Bad extension for %s: Expectetd %s, got %s", i.t, i.expExt, actual.ID())
 		}
 	}
 }
@@ -35,8 +35,8 @@ func TestJpegFormat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if f.Id != "jpg" {
-		t.Errorf("Bad format, expected %s, got %s", "jpg", f)
+	if f.ID() != "jpg" {
+		t.Errorf("Bad format, expected %s, got %s", "jpg", f.ID())
 	}
 }
 

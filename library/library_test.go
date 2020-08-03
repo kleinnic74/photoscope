@@ -10,9 +10,10 @@ import (
 
 	"bitbucket.org/kleinnic74/photos/domain"
 	"bitbucket.org/kleinnic74/photos/domain/gps"
+	"github.com/stretchr/testify/assert"
 )
 
-func TestMarshalJSON(t *testing.T) {
+func TestUnmarshalJSON(t *testing.T) {
 	data := []byte(`{
 		"path": "2018/02/03",
 		"id": "12345678",
@@ -26,10 +27,40 @@ func TestMarshalJSON(t *testing.T) {
 	if err := json.Unmarshal(data, &p); err != nil {
 		t.Fatalf("Failed to Unmarshal JSON: %s", err)
 	}
-	assertEquals(t, "format", "jpg", p.Format().Id)
+	assertEquals(t, "format", "jpg", p.Format().ID())
 	assertEquals(t, "path", "2018/02/03", p.path)
 	assertEquals(t, "id", "12345678", p.id)
 	assertEquals(t, "gps.lat", "[45.123130;47.123445]", p.location.String())
+}
+
+func TestMarshallJSON(t *testing.T) {
+	p := Photo{
+		id:        "id",
+		path:      "to/file",
+		format:    domain.MustFormatForExt("jpg"),
+		location:  gps.NewCoordinates(12, 34),
+		dateTaken: time.Now(),
+	}
+	dateUN := p.dateTaken.UnixNano()
+	assert.Equal(t, "[12.000000;34.000000]", p.location.String())
+	expected := `{
+  "path": "to/file",
+  "id": "id",
+  "format": "jpg",
+  "dateUN": %d,
+  "gps": {
+    "lat": 12,
+    "long": 34
+  }
+}`
+	expected = fmt.Sprintf(expected, dateUN)
+	out, err := json.MarshalIndent(&p, "", "  ")
+	if err != nil {
+		t.Errorf("JSON marhsalling failed: %s", err)
+	}
+	if expected != string(out) {
+		assert.Equal(t, expected, string(out))
+	}
 }
 
 func BenchmarkMarshalJSON(b *testing.B) {

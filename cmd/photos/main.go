@@ -2,82 +2,102 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
+	"time"
 
-	log "github.com/sirupsen/logrus"
-
-	"bitbucket.org/kleinnic74/photos/domain"
 	"bitbucket.org/kleinnic74/photos/library"
 	"bitbucket.org/kleinnic74/photos/library/boltstore"
+	"bitbucket.org/kleinnic74/photos/logging"
 	"bitbucket.org/kleinnic74/photos/rest"
+	"bitbucket.org/kleinnic74/photos/tasks"
+	"github.com/gorilla/mux"
+	"go.uber.org/zap"
 )
 
 var (
-	importdir      string
 	matrixFilename string
 	libDir         string
 	port           uint
+
+	logger *zap.Logger
+	ctx    context.Context
 )
 
 func init() {
-	log.SetFormatter(&log.TextFormatter{})
-
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s  <importdir>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s  [options]\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 	// flag.StringVar(&matrixFilename, "m", "distance.png", "Name of distance matrix file")
 	flag.StringVar(&libDir, "l", "gophotos", "Path to photo library")
 	flag.UintVar(&port, "p", 8080, "HTTP server port")
+	ctx = logging.Context(context.Background(), nil)
+	logger = logging.From(ctx)
+
 	flag.Parse()
-	importdir = flag.Arg(0)
-	if importdir == "" {
-		flag.Usage()
-		os.Exit(1)
-	}
-}
-
-type Counter struct {
-	count int
-}
-
-func (c *Counter) imageFound(img domain.Photo) error {
-	log.Printf("Found photo: %s [%s]- Taken on: %s at %s", img.ID(), img.Format().Id, img.DateTaken(), img.Location())
-	c.count++
-	return nil
-}
-
-// Total returns the number of items found
-func (c *Counter) Total() int {
-	return c.count
 }
 
 func main() {
 	//	classifier := NewEventClassifier()
-
 	lib, err := library.NewBasicPhotoLibrary(libDir, boltstore.NewBoltStore)
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatal("Failed to initialize library", zap.NamedError("err", err))
 	}
+
+	router := mux.NewRouter()
+	photoApp := rest.NewApp(lib)
+	photoApp.InitRoutes(router)
+
+	executor := tasks.NewSerialTaskExecutor(lib)
+	executorContext, cancelExecutor := context.WithCancel(ctx)
+	go executor.DrainTasks(executorContext)
+	tasksApp := rest.NewTaskHandler(executor)
+	tasksApp.InitRoutes(router)
+
+	logger.Info("HTTP server started", zap.Uint("port", port))
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+
+	signalContext, cancel := context.WithCancel(ctx)
+
 	go func() {
-		importer, err := NewDirectoryImporter(importdir)
-		if err != nil {
-			log.Fatalf("Cannot list photos from %s: %s", importdir, err)
-		}
-		counter := Counter{count: 0}
-		err = importer.SkipDir("@eaDir").Walk(
-			NewPhotoHandlerChain().Then(counter.imageFound).Then(lib.Add).Do())
-		if err != nil {
-			log.Fatal(err)
-		}
-		log.Printf("Found %d images", counter.Total())
+		oscall := <-c
+		logger.Info("Received signal", zap.Any("signal", oscall))
+		cancel()
 	}()
 
-	app := rest.NewApp(lib)
-	http.ListenAndServe(fmt.Sprintf(":%d", port), app)
+	server := http.Server{
+		Addr:    fmt.Sprintf(":%d", port),
+		Handler: rest.WithMiddleWares(router),
+	}
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Fatal("HTTP server failed", zap.Error(err))
+		}
+		logger.Info("HTTP server stopped")
+	}()
+
+	<-signalContext.Done()
+
+	logger.Info("Stopping server...")
+
+	ctxShutdown, cancelServerShutdown := context.WithTimeout(ctx, 5*time.Second)
+	defer func() {
+		cancelServerShutdown()
+	}()
+	if err := server.Shutdown(ctxShutdown); err != nil {
+		logger.Fatal(("Failed to shutdown HTTP server"), zap.Error(err))
+	}
+
+	cancelExecutor()
+
+	logger.Info("Terminated gracefully")
 
 	// img := classifier.DistanceMatrixToImage()
 	// log.Printf("Creating time-distance matrix image %s", matrixFilename)

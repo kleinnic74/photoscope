@@ -1,6 +1,7 @@
 package domain_test
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -16,7 +17,7 @@ type PhotoData struct {
 
 func TestNewPhoto(t *testing.T) {
 	var data = []PhotoData{
-		{"testdata/orientation/portrait_3.jpg", "portrait_3", "jpg", "2018-02-24T15:19:27+01:00"},
+		{"testdata/orientation/portrait_3.jpg", "portrait_3", "jpg", fileModificationTime("testdata/orientation/portrait_3.jpg")},
 		{"testdata/Canon_40D.jpg", "Canon_40D", "jpg", "2008-05-30T15:56:01+02:00"},
 	}
 	for _, p := range data {
@@ -29,15 +30,15 @@ func TestNewPhoto(t *testing.T) {
 }
 
 func assertExpected(t *testing.T, expected *PhotoData, actual photos.Photo) {
-	if expected.Format != actual.Format().Id {
-		t.Errorf("Bad value for Filename: got %s, expected %s", actual.Format().Id, expected.Format)
+	if expected.Format != actual.Format().ID() {
+		t.Errorf("%s: Bad value for Filename: got %s, expected %s", expected.Path, actual.Format().ID(), expected.Format)
 	}
 	actualDateTaken := actual.DateTaken().Format(time.RFC3339)
 	if expected.Date != actualDateTaken {
-		t.Errorf("Bad value for DateTaken: got %s, expected %s", actualDateTaken, expected.Date)
+		t.Errorf("%s: Bad value for DateTaken: got %s, expected %s", expected.Path, actualDateTaken, expected.Date)
 	}
 	if expected.Id != actual.ID() {
-		t.Errorf("Bad value for Id: got %s, expected %s", actual.ID(), expected.Id)
+		t.Errorf("%s: Bad value for Id: got %s, expected %s", expected.Path, actual.ID(), expected.Id)
 	}
 }
 
@@ -47,4 +48,9 @@ func at(t string) time.Time {
 		panic(err)
 	}
 	return ts.UTC()
+}
+
+func fileModificationTime(path string) string {
+	info, _ := os.Stat(path)
+	return info.ModTime().Format(time.RFC3339)
 }
