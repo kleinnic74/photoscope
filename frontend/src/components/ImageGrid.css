@@ -1,0 +1,8 @@
+.ImageGrid {
+    width: 100%;
+}
+
+.ImageGrid td {
+    width: 100%;
+    align-content: center;
+}
