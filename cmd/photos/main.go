@@ -5,24 +5,27 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"time"
 
 	"bitbucket.org/kleinnic74/photos/library"
 	"bitbucket.org/kleinnic74/photos/library/boltstore"
 	"bitbucket.org/kleinnic74/photos/logging"
 	"bitbucket.org/kleinnic74/photos/rest"
+	"bitbucket.org/kleinnic74/photos/rest/wdav"
 	"bitbucket.org/kleinnic74/photos/tasks"
 	"github.com/gorilla/mux"
 	"go.uber.org/zap"
+	"golang.org/x/net/webdav"
 )
 
 var (
-	matrixFilename string
-	libDir         string
-	port           uint
+	libDir string
+	port   uint
 
 	logger *zap.Logger
 	ctx    context.Context
@@ -33,7 +36,6 @@ func init() {
 		fmt.Fprintf(os.Stderr, "Usage: %s  [options]\n", os.Args[0])
 		flag.PrintDefaults()
 	}
-	// flag.StringVar(&matrixFilename, "m", "distance.png", "Name of distance matrix file")
 	flag.StringVar(&libDir, "l", "gophotos", "Path to photo library")
 	flag.UintVar(&port, "p", 8080, "HTTP server port")
 	ctx = logging.Context(context.Background(), nil)
@@ -48,7 +50,7 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to initialize library", zap.NamedError("err", err))
 	}
-
+	logger.Info("Opened photo library", zap.String("path", libDir))
 	router := mux.NewRouter()
 	photoApp := rest.NewApp(lib)
 	photoApp.InitRoutes(router)
@@ -59,7 +61,25 @@ func main() {
 	tasksApp := rest.NewTaskHandler(executor)
 	tasksApp.InitRoutes(router)
 
-	logger.Info("HTTP server started", zap.Uint("port", port))
+	tmpdir := filepath.Join(libDir, "tmp")
+	wdav, err := wdav.NewWebDavAdapter(lib, tmpdir)
+	if err != nil {
+		logger.Fatal("Failed to launch photos", zap.Error(err))
+	}
+	dav := &webdav.Handler{
+		Prefix:     "/dav/",
+		LockSystem: webdav.NewMemLS(),
+		FileSystem: wdav,
+		// Logger: func(r *http.Request, err error) {
+		// 	logger := logging.From(r.Context()).Named("webdav")
+		// 	if err != nil {
+		// 		logger.Error("webdav error", zap.Error(err))
+		// 	} else {
+		// 		logger.Info("webdav", zap.String("path", r.URL.Path))
+		// 	}
+		// },
+	}
+	router.PathPrefix("/dav/").HandlerFunc(dav.ServeHTTP)
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
@@ -72,11 +92,29 @@ func main() {
 		cancel()
 	}()
 
+	if ifs, err := net.Interfaces(); err == nil {
+		for _, intf := range ifs {
+			if addr, err := intf.Addrs(); err == nil {
+				for _, a := range addr {
+					ip, _, _ := net.ParseCIDR(a.String())
+					if ip.IsLoopback() || !ip.IsGlobalUnicast() {
+						continue
+					}
+					logger.Info("Address", zap.String("if", intf.Name),
+						zap.String("net", a.Network()),
+						zap.String("addr", a.String()),
+						zap.Bool("loopback", ip.IsLoopback()),
+						zap.Bool("global", ip.IsGlobalUnicast()))
+				}
+			}
+		}
+	}
 	server := http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
-		Handler: rest.WithMiddleWares(router),
+		Handler: rest.WithMiddleWares(router, "rest"),
 	}
 	go func() {
+		logger.Info("Starting HTTP server...", zap.Uint("port", port))
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Fatal("HTTP server failed", zap.Error(err))
 		}

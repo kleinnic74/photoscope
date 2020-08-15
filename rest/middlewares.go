@@ -11,8 +11,8 @@ import (
 	"go.uber.org/zap"
 )
 
-func WithMiddleWares(handler http.Handler) http.Handler {
-	return cors(addRequestID(logRequest(handler)))
+func WithMiddleWares(handler http.Handler, name string) http.Handler {
+	return cors(addRequestID(logRequest(handler, name)))
 }
 
 type responseWrapper struct {
@@ -33,7 +33,7 @@ func (w *responseWrapper) WriteHeader(status int) {
 	w.writer.WriteHeader(status)
 }
 
-func logRequest(f http.Handler) http.Handler {
+func logRequest(f http.Handler, name string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		log := logging.From(r.Context())
@@ -43,11 +43,12 @@ func logRequest(f http.Handler) http.Handler {
 			writer: w,
 		}
 		defer func() {
-			log := logging.From(r.Context())
+			log := logging.From(r.Context()).Named(name)
 			log.Debug("HTTP Request",
 				zap.String("method", r.Method),
 				zap.String("path", r.URL.Path),
 				zap.Duration("duration", time.Since(start)),
+				zap.String("request", rid),
 				zap.Int("status", wrapper.status))
 		}()
 		f.ServeHTTP(&wrapper, r.WithContext(ctx))
