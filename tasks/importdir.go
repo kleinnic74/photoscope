@@ -5,13 +5,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"bitbucket.org/kleinnic74/photos/domain"
 	"bitbucket.org/kleinnic74/photos/library"
 	"bitbucket.org/kleinnic74/photos/logging"
 	"go.uber.org/zap"
 )
 
-type importTask struct {
+type importDirTask struct {
 	Importdir string `json:"importdir,omitempty"`
 	DryRun    bool   `json:"dryrun"`
 }
@@ -23,21 +22,21 @@ var (
 )
 
 func init() {
-	Register("import", NewImportTask)
+	Register("importDir", NewImportDirTask)
 }
 
-func NewImportTask() Task {
-	return &importTask{}
+func NewImportDirTask() Task {
+	return &importDirTask{}
 }
 
 func NewImportTaskWithParams(dryrun bool, dir string) Task {
-	return &importTask{
+	return &importDirTask{
 		Importdir: dir,
 		DryRun:    dryrun,
 	}
 }
 
-func (t importTask) Execute(ctx context.Context, lib library.PhotoLibrary) error {
+func (t importDirTask) Execute(ctx context.Context, tasks TaskExecutor, lib library.PhotoLibrary) error {
 	ctx, logger := logging.SubFrom(ctx, "importTask")
 	logger.Info("Importing photos", zap.String("dir", t.Importdir))
 	var count uint
@@ -60,27 +59,15 @@ func (t importTask) Execute(ctx context.Context, lib library.PhotoLibrary) error
 				logger.Debug("Entering dir", zap.String("dir", path))
 				return nil
 			}
-			return t.importImage(ctx, path, lib)
+			return t.importImage(ctx, path, tasks)
 		})
 	} else {
-		return t.importImage(ctx, t.Importdir, lib)
+		return t.importImage(ctx, t.Importdir, tasks)
 	}
 }
 
-func (t importTask) importImage(ctx context.Context, path string, lib library.PhotoLibrary) error {
-	log := logging.From(ctx)
-	img, err := domain.NewPhoto(path)
-	if err != nil {
-		log.Debug("Skipping", zap.String("file", path), zap.NamedError("cause", err))
-		return nil
-	}
-	log.Info("Found image", zap.String("file", path))
-	if t.DryRun {
-		return nil
-	}
-	if err := lib.Add(ctx, img); err != nil {
-		return err
-	}
-	// Create thumb
-	return nil
+func (t importDirTask) importImage(ctx context.Context, path string, tasks TaskExecutor) error {
+	task := NewImportFileTaskWithParams(false, path, false)
+	_, err := tasks.Submit(ctx, task)
+	return err
 }

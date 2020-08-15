@@ -22,6 +22,7 @@ type fsNode struct {
 	close    closeCallback
 	tmpname  string
 	file     *os.File
+	size     int64
 }
 
 func newFileNode(name string, parent *fsNode, close closeCallback) *fsNode {
@@ -77,7 +78,7 @@ func (n *fsNode) Name() string {
 }
 
 func (n *fsNode) Size() int64 {
-	return 0
+	return n.size
 }
 
 func (n *fsNode) Sys() interface{} {
@@ -102,7 +103,9 @@ func (n *fsNode) Close() error {
 }
 
 func (n *fsNode) Write(p []byte) (count int, err error) {
-	return n.file.Write(p)
+	count, err = n.file.Write(p)
+	n.size += int64(count)
+	return
 }
 
 func (n *fsNode) Read(p []byte) (count int, err error) {

@@ -4,21 +4,23 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 
-	"bitbucket.org/kleinnic74/photos/library"
 	"bitbucket.org/kleinnic74/photos/logging"
 	"go.uber.org/zap"
 	"golang.org/x/net/webdav"
 )
 
+type UploadedFunc func(ctx context.Context, path string)
+
 type WebDavAdapter struct {
-	lib    library.PhotoLibrary
-	root   *fsNode
-	tmpDir string
+	root           *fsNode
+	tmpDir         string
+	uploadCallback UploadedFunc
 }
 
-func NewWebDavAdapter(lib library.PhotoLibrary, tmpdir string) (*WebDavAdapter, error) {
+func NewWebDavAdapter(tmpdir string, callback UploadedFunc) (*WebDavAdapter, error) {
 	info, err := os.Stat(tmpdir)
 	if err != nil {
 		if err = os.MkdirAll(tmpdir, 0755); err != nil {
@@ -28,9 +30,9 @@ func NewWebDavAdapter(lib library.PhotoLibrary, tmpdir string) (*WebDavAdapter, 
 		return nil, fmt.Errorf("Path '%s' is not a directory", tmpdir)
 	}
 	return &WebDavAdapter{
-		lib:    lib,
-		root:   NewDirNode("", nil),
-		tmpDir: tmpdir,
+		root:           NewDirNode("", nil),
+		tmpDir:         tmpdir,
+		uploadCallback: callback,
 	}, nil
 }
 
@@ -116,6 +118,14 @@ func (dav *WebDavAdapter) findNode(path []string) (*fsNode, error) {
 }
 
 func (dav *WebDavAdapter) close(ctx context.Context, node *fsNode) error {
-	logging.From(ctx).Info("Closed", zap.String("name", node.name))
+	path := dav.tmpfile(node)
+	logging.From(ctx).Info("Closed", zap.String("name", node.name), zap.String("path", path))
+	if dav.uploadCallback != nil {
+		dav.uploadCallback(ctx, path)
+	}
 	return nil
+}
+
+func (dav *WebDavAdapter) tmpfile(node *fsNode) string {
+	return filepath.Join(dav.tmpDir, node.tmpname)
 }

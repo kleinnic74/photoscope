@@ -133,7 +133,11 @@ func (lib *BasicPhotoLibrary) Add(ctx context.Context, photo domain.Photo) error
 	if lib.db.Exists(photo.DateTaken().UTC(), id) {
 		return PhotoAlreadyExists(id)
 	}
-	if err := lib.addPhotoFile(ctx, photo.Content, lib.photodir, targetDir, name); err != nil {
+	content, err := photo.Content()
+	if err != nil {
+		return err
+	}
+	if err := lib.addPhotoFile(ctx, content, lib.photodir, targetDir, name); err != nil {
 		return err
 	}
 	p := &Photo{
@@ -202,7 +206,7 @@ func (lib *BasicPhotoLibrary) createDirectory(ctx context.Context, basedir, dir 
 	}
 }
 
-func (lib *BasicPhotoLibrary) addPhotoFile(ctx context.Context, in ReaderFunc, basedir, targetDir, targetName string) error {
+func (lib *BasicPhotoLibrary) addPhotoFile(ctx context.Context, in io.ReadCloser, basedir, targetDir, targetName string) error {
 	pathInLib := filepath.Join(basedir, targetDir, targetName)
 	log, ctx := logging.FromWithFields(ctx, zap.String("dest", pathInLib))
 	if _, err := os.Stat(pathInLib); err == nil {
@@ -214,27 +218,20 @@ func (lib *BasicPhotoLibrary) addPhotoFile(ctx context.Context, in ReaderFunc, b
 	if err != nil {
 		return err
 	}
-	// Does not exist yet, copy in the background
-	go func() {
-		out, err := os.Create(pathInLib)
-		if err != nil {
-			log.Error("Could not add photo", zap.Error(err))
-			return
-		}
-		defer out.Close()
-		content, err := in()
-		if err != nil {
-			log.Error("Could not read original photo content", zap.Error(err))
-			return
-		}
-		defer content.Close()
-		_, err = io.Copy(out, content)
-		if err != nil {
-			log.Error("Could not copy photo to library", zap.Error(err))
-			return
-		}
-		log.Info("Added photo")
-	}()
+	// Does not exist yet, copy
+	out, err := os.Create(pathInLib)
+	if err != nil {
+		log.Error("Could not add photo", zap.Error(err))
+		return err
+	}
+	defer out.Close()
+	defer in.Close()
+	_, err = io.Copy(out, in)
+	if err != nil {
+		log.Error("Could not copy photo to library", zap.Error(err))
+		return err
+	}
+	log.Info("Added photo")
 	return nil
 }
 

@@ -54,7 +54,7 @@ func (t *serialTaskExecutor) DrainTasks(ctx context.Context) {
 		log := logger.Named("Worker")
 		for e := range taskCh {
 			log.Info("Executing task", zap.Uint64("taskID", uint64(e.ID)))
-			e.Error = e.task.Execute(ctx, t.photos)
+			e.Error = e.task.Execute(ctx, t, t.photos)
 			if e.Error != nil {
 				e.Status = Error
 			} else {

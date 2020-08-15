@@ -62,7 +62,12 @@ func main() {
 	tasksApp.InitRoutes(router)
 
 	tmpdir := filepath.Join(libDir, "tmp")
-	wdav, err := wdav.NewWebDavAdapter(lib, tmpdir)
+	wdav, err := wdav.NewWebDavAdapter(tmpdir, func(ctx context.Context, path string) {
+		task := tasks.NewImportFileTaskWithParams(false, path, true)
+		if _, err := executor.Submit(ctx, task); err != nil {
+			logging.From(ctx).Warn("Could not import file", zap.String("path", path), zap.Error(err))
+		}
+	})
 	if err != nil {
 		logger.Fatal("Failed to launch photos", zap.Error(err))
 	}
@@ -70,14 +75,6 @@ func main() {
 		Prefix:     "/dav/",
 		LockSystem: webdav.NewMemLS(),
 		FileSystem: wdav,
-		// Logger: func(r *http.Request, err error) {
-		// 	logger := logging.From(r.Context()).Named("webdav")
-		// 	if err != nil {
-		// 		logger.Error("webdav error", zap.Error(err))
-		// 	} else {
-		// 		logger.Info("webdav", zap.String("path", r.URL.Path))
-		// 	}
-		// },
 	}
 	router.PathPrefix("/dav/").HandlerFunc(dav.ServeHTTP)
 

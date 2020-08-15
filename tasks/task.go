@@ -15,7 +15,7 @@ import (
 )
 
 type Task interface {
-	Execute(context.Context, library.PhotoLibrary) error
+	Execute(context.Context, TaskExecutor, library.PhotoLibrary) error
 }
 
 type TaskInitFunc func() Task
