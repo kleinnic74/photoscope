@@ -17,12 +17,6 @@ var (
 	jpg = domain.MustFormatForExt("jpg")
 )
 
-type page struct {
-	Data     interface{} `json:"data"`
-	Next     string      `json:"next,omitempty"`
-	Previous string      `json:"previous,omitempty"`
-}
-
 // App is the REST API that can be used as an http.HandlerFunc
 type App struct {
 	router *mux.Router
@@ -53,12 +47,14 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) getPhotos(w http.ResponseWriter, r *http.Request) {
 	c := cursor.DecodeFromRequest(r)
-	photos := a.lib.FindAllPaged(r.Context(), c.Start, c.PageSize)
+	photos, hasMore := a.lib.FindAllPaged(r.Context(), c.Start, c.PageSize)
+	logging.From(r.Context()).Named("http").Info("/photos",
+		zap.Bool("hasMore", hasMore), zap.Uint("start", c.Start), zap.Uint("page", c.PageSize))
 	photoViews := make([]views.Photo, len(photos))
 	for i, p := range photos {
 		photoViews[i] = views.PhotoFrom(p)
 	}
-	respondWithJSON(w, http.StatusOK, cursor.PageFor(photoViews, c))
+	respondWithJSON(w, http.StatusOK, cursor.PageFor(photoViews, c, hasMore))
 }
 
 func (a *App) getPhoto(w http.ResponseWriter, r *http.Request) {

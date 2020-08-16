@@ -1,18 +1,22 @@
 package cursor
 
-type Page struct {
-	Data interface{} `json:"data"`
-	Prev string      `json:"prev,omitempty"`
-	Next string      `json:"next,omitempty"`
+type Link struct {
+	Name string `json:"name"`
+	Href string `json:"href"`
 }
 
-func PageFor(data interface{}, cursor Cursor) (page Page) {
+type Page struct {
+	Data  interface{} `json:"data"`
+	Links []Link      `json:"links,omitempty"`
+}
+
+func PageFor(data interface{}, cursor Cursor, hasMore bool) (page Page) {
 	page.Data = data
 	if previous, exists := cursor.Previous(); exists {
-		page.Prev = previous.Encode()
+		page.Links = append(page.Links, Link{"previous", previous.Encode()})
 	}
-	if next, exists := cursor.Next(); exists {
-		page.Next = next.Encode()
+	if next, exists := cursor.Next(); exists && hasMore {
+		page.Links = append(page.Links, Link{"next", next.Encode()})
 	}
 	return
 }

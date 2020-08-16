@@ -26,7 +26,7 @@ type PhotoLibrary interface {
 	Add(ctx context.Context, photo domain.Photo) error
 	Get(ctx context.Context, id string) (domain.Photo, error)
 	FindAll(ctx context.Context) []domain.Photo
-	FindAllPaged(ctx context.Context, start, maxCount uint) []domain.Photo
+	FindAllPaged(ctx context.Context, start, maxCount uint) ([]domain.Photo, bool)
 	Find(ctx context.Context, start, end time.Time) []domain.Photo
 	Thumb(ctx context.Context, id string, size domain.ThumbSize) (image.Image, domain.Format, error)
 }
@@ -37,7 +37,7 @@ type Store interface {
 	Add(*Photo) error
 	Get(id string) (*Photo, error)
 	FindAll() []*Photo
-	FindAllPaged(start, maxCount uint) []*Photo
+	FindAllPaged(start, maxCount uint) ([]*Photo, bool)
 	Find(start, end time.Time) []*Photo
 }
 
@@ -174,13 +174,14 @@ func (lib *BasicPhotoLibrary) FindAll(ctx context.Context) []domain.Photo {
 
 // FindAllPaged returns maximum maxCount photos from the underlying store starting
 // at start index
-func (lib *BasicPhotoLibrary) FindAllPaged(ctx context.Context, start, maxCount uint) []domain.Photo {
+func (lib *BasicPhotoLibrary) FindAllPaged(ctx context.Context, start, maxCount uint) ([]domain.Photo, bool) {
 	var result = make([]domain.Photo, 0)
-	for _, p := range lib.db.FindAllPaged(start, maxCount) {
+	photos, hasMore := lib.db.FindAllPaged(start, maxCount)
+	for _, p := range photos {
 		p.lib = lib
 		result = append(result, p)
 	}
-	return result
+	return result, hasMore
 }
 
 // Find returns all photos stored in this library that have been taken between

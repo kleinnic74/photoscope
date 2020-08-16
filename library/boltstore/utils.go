@@ -11,6 +11,8 @@ type Cursor interface {
 	Limit(count uint) Cursor
 	First() (key, value []byte)
 	Next() (key, value []byte)
+
+	HasMore() bool
 }
 
 type baseCursor struct {
@@ -20,15 +22,21 @@ type baseCursor struct {
 }
 
 type forwardCursor struct {
+	hasMore bool
 	baseCursor
 }
 
 type reverseCursor struct {
+	hasMore bool
 	baseCursor
 }
 
 func newForwardCursor(delegate *bolt.Cursor) Cursor {
-	return &forwardCursor{baseCursor: baseCursor{delegate: delegate, limit: -1}}
+	return &forwardCursor{baseCursor: baseCursor{delegate: delegate, limit: -1}, hasMore: true}
+}
+
+func (c *forwardCursor) HasMore() bool {
+	return c.hasMore
 }
 
 func (c *forwardCursor) Reverse() Cursor {
@@ -51,6 +59,7 @@ func (c *forwardCursor) First() (key []byte, value []byte) {
 		c.skip--
 	}
 	c.limit--
+	c.hasMore = k != nil
 	return k, v
 }
 
@@ -63,17 +72,22 @@ func (c *forwardCursor) Next() (key []byte, value []byte) {
 		c.skip--
 	}
 	c.limit--
+	c.hasMore = k != nil
 	return k, v
 }
 
 //------------------------------------------------------------------------------
 
 func newReverseCursor(delegate *bolt.Cursor) Cursor {
-	return &reverseCursor{baseCursor: baseCursor{delegate: delegate}}
+	return &reverseCursor{baseCursor: baseCursor{delegate: delegate}, hasMore: true}
 }
 
 func (c *reverseCursor) Reverse() Cursor {
 	return newForwardCursor(c.delegate)
+}
+
+func (c *reverseCursor) HasMore() bool {
+	return c.hasMore
 }
 
 func (c *reverseCursor) First() (key, value []byte) {
@@ -82,6 +96,7 @@ func (c *reverseCursor) First() (key, value []byte) {
 		c.skip--
 	}
 	c.limit--
+	c.hasMore = k != nil
 	return k, v
 }
 
@@ -104,5 +119,6 @@ func (c *reverseCursor) Next() (key []byte, value []byte) {
 		c.skip--
 	}
 	c.limit--
+	c.hasMore = k != nil
 	return k, v
 }

@@ -53,8 +53,8 @@ func (lib *testLib) FindAll(ctx context.Context) []domain.Photo {
 	return lib.photos
 }
 
-func (lib *testLib) FindAllPaged(ctx context.Context, start, max uint) []domain.Photo {
-	return lib.photos
+func (lib *testLib) FindAllPaged(ctx context.Context, start, max uint) ([]domain.Photo, bool) {
+	return lib.photos, false
 }
 
 func (lib *testLib) Find(ctx context.Context, start, end time.Time) []domain.Photo {

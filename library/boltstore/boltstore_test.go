@@ -136,7 +136,7 @@ func deleteIfExists(t *testing.T, file string) {
 
 func assertPhotosAreEqual(t *testing.T, p1, p2 *library.Photo) {
 	if (p1 == nil || p2 == nil) && p1 != p2 {
-		t.Errorf("Both should be nil but are not: p1=%s, p2=%s", p1, p2)
+		t.Errorf("Both should be nil but are not: p1=%v, p2=%v", p1, p2)
 	}
 	if p1.ID() != p2.ID() {
 		t.Errorf("Different Id()s: p1: %s, p2: %s", p1.ID(), p2.ID())

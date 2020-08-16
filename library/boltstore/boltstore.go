@@ -98,20 +98,22 @@ func (store *BoltStore) Add(p *library.Photo) error {
 
 // FindAll returns all photos in this store
 func (store *BoltStore) FindAll() []*library.Photo {
-	return store.findRange(func(c Cursor) Cursor {
+	photos, _ := store.findRange(func(c Cursor) Cursor {
 		return c
 	})
+	return photos
 }
 
 //FindAllPaged returns at most max photos from the store starting at photo index start
-func (store *BoltStore) FindAllPaged(start, max uint) []*library.Photo {
+func (store *BoltStore) FindAllPaged(start, max uint) ([]*library.Photo, bool) {
 	return store.findRange(func(c Cursor) Cursor {
 		return c.Skip(start).Limit(max)
 	})
 }
 
-func (store *BoltStore) findRange(f func(Cursor) Cursor) []*library.Photo {
+func (store *BoltStore) findRange(f func(Cursor) Cursor) ([]*library.Photo, bool) {
 	var found = make([]*library.Photo, 0)
+	var hasMore bool
 
 	err := store.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(photosBucket)
@@ -124,12 +126,13 @@ func (store *BoltStore) findRange(f func(Cursor) Cursor) []*library.Photo {
 			}
 			found = append(found, &photo)
 		}
+		hasMore = c.HasMore()
 		return nil
 	})
 	if err != nil {
 		log.Printf("Could not read photos: %s", err)
 	}
-	return found
+	return found, hasMore
 }
 
 // Find returns all photos in this library between the given time instants
