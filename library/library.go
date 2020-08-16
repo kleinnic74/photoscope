@@ -3,7 +3,6 @@ package library
 import (
 	"context"
 	"fmt"
-	"image"
 	"io"
 	"os"
 	"path/filepath"
@@ -28,7 +27,9 @@ type PhotoLibrary interface {
 	FindAll(ctx context.Context) []domain.Photo
 	FindAllPaged(ctx context.Context, start, maxCount uint) ([]domain.Photo, bool)
 	Find(ctx context.Context, start, end time.Time) []domain.Photo
-	Thumb(ctx context.Context, id string, size domain.ThumbSize) (image.Image, domain.Format, error)
+
+	OpenContent(ctx context.Context, id string) (io.ReadCloser, domain.Format, error)
+	OpenThumb(ctx context.Context, id string, size domain.ThumbSize) (io.ReadCloser, domain.Format, error)
 }
 
 // Store represents a persistent storage of photo meta-data
@@ -195,6 +196,15 @@ func (lib *BasicPhotoLibrary) Find(ctx context.Context, start, end time.Time) []
 	return result
 }
 
+func (lib *BasicPhotoLibrary) OpenContent(ctx context.Context, id string) (io.ReadCloser, domain.Format, error) {
+	p, err := lib.db.Get(id)
+	if err != nil {
+		return nil, nil, err
+	}
+	reader, err := lib.openPhoto(p.path)
+	return reader, p.format, err
+}
+
 func (lib *BasicPhotoLibrary) createDirectory(ctx context.Context, basedir, dir string) error {
 	fullpath := filepath.Join(basedir, dir)
 	if info, err := os.Stat(fullpath); err != nil {
@@ -248,7 +258,7 @@ func (lib *BasicPhotoLibrary) fileSizeOf(path string) int64 {
 	return info.Size()
 }
 
-func (lib *BasicPhotoLibrary) Thumb(ctx context.Context, id string, size domain.ThumbSize) (image.Image, domain.Format, error) {
+func (lib *BasicPhotoLibrary) OpenThumb(ctx context.Context, id string, size domain.ThumbSize) (io.ReadCloser, domain.Format, error) {
 	ctx = logging.Context(ctx, logging.From(ctx).Named("library").With(zap.String("photo", id)))
 	logger := logging.From(ctx)
 
@@ -288,16 +298,13 @@ func (lib *BasicPhotoLibrary) Thumb(ctx context.Context, id string, size domain.
 		defer out.Close()
 		lib.thumbFormat.Encode(thumb, out)
 		logger.Info("Created thumb", zap.Duration("duration", time.Since(start)))
-		return thumb, lib.thumbFormat, nil
 	}
 	// Thumb exists
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, nil, err
 	}
-	defer f.Close()
-	img, err := lib.thumbFormat.Decode(f)
-	return img, lib.thumbFormat, err
+	return f, lib.thumbFormat, nil
 }
 
 func canonicalizeFilename(photo domain.Photo) (dir, filename, id string) {

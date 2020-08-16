@@ -23,7 +23,9 @@ func respondWithJSON(w http.ResponseWriter, status int, payload interface{}) {
 
 func respondWithBinary(w http.ResponseWriter, mime string, size int64, data io.Reader) {
 	w.Header().Set("Content-Type", mime)
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", size))
+	if size > 0 {
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", size))
+	}
 	w.WriteHeader(http.StatusOK)
 	io.Copy(w, data)
 }

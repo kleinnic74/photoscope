@@ -75,7 +75,7 @@ func (a *App) getPhoto(w http.ResponseWriter, r *http.Request) {
 func (a *App) getPhotoImage(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
-	photo, err := a.lib.Get(r.Context(), id)
+	photo, format, err := a.lib.OpenContent(r.Context(), id)
 	if photo == nil && err == nil {
 		respondWithError(w, http.StatusNotFound, fmt.Errorf("No photo with id %s", id))
 		return
@@ -84,19 +84,14 @@ func (a *App) getPhotoImage(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusInternalServerError, err)
 		return
 	}
-	imgReader, err := photo.Content()
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, err)
-		return
-	}
-	defer imgReader.Close()
-	respondWithBinary(w, photo.Format().Mime(), photo.SizeInBytes(), imgReader)
+	defer photo.Close()
+	respondWithBinary(w, format.Mime(), 0, photo)
 }
 
 func (a *App) getThumb(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
-	thumb, format, err := a.lib.Thumb(r.Context(), id, domain.Small)
+	thumb, format, err := a.lib.OpenThumb(r.Context(), id, domain.Small)
 	if err != nil {
 		switch err.(type) {
 		case library.ErrNotFound:
@@ -109,6 +104,7 @@ func (a *App) getThumb(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	respondWithImage(w, format, thumb)
+	defer thumb.Close()
+	respondWithBinary(w, format.Mime(), 0, thumb)
 	return
 }
