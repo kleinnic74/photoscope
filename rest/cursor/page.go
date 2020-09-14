@@ -12,6 +12,7 @@ type Page struct {
 
 func PageFor(data interface{}, cursor Cursor, hasMore bool) (page Page) {
 	page.Data = data
+	page.Links = []Link{}
 	if previous, exists := cursor.Previous(); exists {
 		page.Links = append(page.Links, Link{"previous", previous.Encode()})
 	}

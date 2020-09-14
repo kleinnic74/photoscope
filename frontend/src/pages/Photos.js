@@ -53,7 +53,7 @@ export default class Photos extends Component {
             .then(data => {
                 this.setState({
                     images: data.data,
-                    links: data.links.reduce((map,l) => {
+                    links: data.links?.reduce((map,l) => {
                         map[l.name] = l
                         return map
                     }, {}),

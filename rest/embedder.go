@@ -11,9 +11,13 @@ import (
 func Embedder() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
+		if path == "" || path == "/" {
+			path = "/index.html"
+		}
 		res, err := embed.GetResource(path)
 		if err != nil {
 			respondWithError(w, http.StatusNotFound, err)
+			return
 		}
 		w.Header().Set("Content-Type", res.Type)
 		w.Header().Set("Content-Length", strconv.Itoa(res.Size()))

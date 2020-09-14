@@ -11,7 +11,7 @@ import Photos from './pages/Photos'
 import Tasks from './pages/Tasks'
 
 function App() {
-  const baseURL = 'http://localhost:8080'
+  const baseURL = document.baseURI
   console.log("Base URL", baseURL)
   return (
     <Router>

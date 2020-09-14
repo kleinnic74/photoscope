@@ -4,12 +4,16 @@ package embed
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"io/ioutil"
 	"mime"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"bitbucket.org/kleinnic74/photos/logging"
+	"go.uber.org/zap"
 )
 
 type Resource struct {
@@ -19,9 +23,10 @@ type Resource struct {
 
 func inferType(path string) string {
 	ext := strings.ToLower(filepath.Ext(path))
-	t := mime.TypeByExtension("." + ext)
+	t := mime.TypeByExtension(ext)
 	if t == "" {
-		return "application/octect-stream"
+		logging.From(context.Background()).Warn("Unkown MIME type", zap.String("ext", ext))
+		return "application/octet-stream"
 	}
 	return t
 }

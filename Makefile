@@ -10,6 +10,8 @@ PKG=./cmd/photos
 
 BINARIES=$(BINARY_WIN) $(BINARY_ARM) $(TOOLS)
 
+FRONTEND=frontend/
+
 GO_VARS=
 
 .PHONY: all
@@ -55,5 +57,11 @@ rundev: run
 rundev: GO_VARS=-X 'bitbucket.org/kleinnic74/photos/consts.devmode=true'
 
 .PHONY: generate
-generate:
+generate: embed/embedded_resources.go
+
+embed/embedded_resources.go: frontend/build
 	go generate ./embed
+
+frontend/build: frontend/src/* frontend/public/*
+	cd frontend && npm run build
+	touch fontend/build
