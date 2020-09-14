@@ -11,8 +11,6 @@ import (
 
 	"bitbucket.org/kleinnic74/photos/library"
 
-	"path/filepath"
-
 	"github.com/boltdb/bolt"
 	"github.com/reusee/mmh3"
 )
@@ -24,26 +22,24 @@ var (
 
 // BoltStore uses BoltDB as the storage implementation to store data about photos
 type BoltStore struct {
-	db *bolt.DB
+	db      *bolt.DB
+	indexes []interface{}
 }
 
+type IndexInitFunc func(*bolt.DB) (interface{}, error)
+
 // NewBoltStore creates a new BoltStore at the given location with the given name
-func NewBoltStore(basedir string, name string) (library.ClosableStore, error) {
-	db, err := bolt.Open(filepath.Join(basedir, name), 0600, nil)
-	if err != nil {
-		return nil, err
+func NewBoltStore(db *bolt.DB) (lib library.ClosableStore, err error) {
+	lib = &BoltStore{
+		db: db,
 	}
 	if err = createBucket(db, photosBucket); err != nil {
-		db.Close()
-		return nil, err
+		return
 	}
 	if err = createBucket(db, idMapBucket); err != nil {
-		db.Close()
-		return nil, err
+		return
 	}
-	return &BoltStore{
-		db: db,
-	}, nil
+	return
 }
 
 func createBucket(db *bolt.DB, name []byte) error {
@@ -97,21 +93,21 @@ func (store *BoltStore) Add(p *library.Photo) error {
 }
 
 // FindAll returns all photos in this store
-func (store *BoltStore) FindAll() []*library.Photo {
-	photos, _ := store.findRange(func(c Cursor) Cursor {
+func (store *BoltStore) FindAll() ([]*library.Photo, error) {
+	photos, _, err := store.findRange(func(c Cursor) Cursor {
 		return c
 	})
-	return photos
+	return photos, err
 }
 
 //FindAllPaged returns at most max photos from the store starting at photo index start
-func (store *BoltStore) FindAllPaged(start, max uint) ([]*library.Photo, bool) {
+func (store *BoltStore) FindAllPaged(start, max uint) ([]*library.Photo, bool, error) {
 	return store.findRange(func(c Cursor) Cursor {
 		return c.Skip(start).Limit(max)
 	})
 }
 
-func (store *BoltStore) findRange(f func(Cursor) Cursor) ([]*library.Photo, bool) {
+func (store *BoltStore) findRange(f func(Cursor) Cursor) ([]*library.Photo, bool, error) {
 	var found = make([]*library.Photo, 0)
 	var hasMore bool
 
@@ -132,11 +128,11 @@ func (store *BoltStore) findRange(f func(Cursor) Cursor) ([]*library.Photo, bool
 	if err != nil {
 		log.Printf("Could not read photos: %s", err)
 	}
-	return found, hasMore
+	return found, hasMore, err
 }
 
 // Find returns all photos in this library between the given time instants
-func (store *BoltStore) Find(start, end time.Time) []*library.Photo {
+func (store *BoltStore) Find(start, end time.Time) ([]*library.Photo, error) {
 	var found = make([]*library.Photo, 0)
 	min, max := boundaryIDs(start, end)
 	err := store.db.View(func(tx *bolt.Tx) error {
@@ -156,7 +152,7 @@ func (store *BoltStore) Find(start, end time.Time) []*library.Photo {
 	if err != nil {
 		log.Printf("Could not read photos: %s", err)
 	}
-	return found
+	return found, err
 }
 
 // Get returns the photo with the given id

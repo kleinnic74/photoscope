@@ -1,8 +1,13 @@
 .ImageGrid {
-    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    grid-auto-flow: dense;
+    gap: 1em;
+    padding: 1em;
 }
 
-.ImageGrid td {
+.ImageGrid img {
     width: 100%;
+    overflow: hidden;
     align-content: center;
 }

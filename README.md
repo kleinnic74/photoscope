@@ -16,13 +16,21 @@ Provides the back end as REST service in Golang and the front-end as an HTML app
 Current Phase: early prototypes
 
 * basic photo indexing capabilities:
-    * import photos
-    * extract time and location meta-data
-    * index by time, by location
+  * import photos
+    * webdav - DONE
+    * directory - DONE
+  * extract time and location meta-data - DONE
+  * reverse geo-code location - DONE
+  * index by time, by location
 * HTML browser
-    * browse index
+    * browse index - DONE
+        * thumbs not taking rotation into account
     * view photos
+    * show image fullscreen in frontend - DONE
 
+TODOS:
+
+* read back using webdav does not work
 
 Next Phase: more advanced indexing
 

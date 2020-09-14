@@ -1,12 +1,14 @@
-package tasks
+package importer
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"bitbucket.org/kleinnic74/photos/domain"
 	"bitbucket.org/kleinnic74/photos/library"
 	"bitbucket.org/kleinnic74/photos/logging"
+	"bitbucket.org/kleinnic74/photos/tasks"
 	"go.uber.org/zap"
 )
 
@@ -16,15 +18,11 @@ type importFileTask struct {
 	Delete bool   `json:"delete,omitempty"`
 }
 
-func init() {
-	Register("importFile", NewImportFileTask)
-}
-
-func NewImportFileTask() Task {
+func NewImportFileTask() tasks.Task {
 	return &importFileTask{}
 }
 
-func NewImportFileTaskWithParams(dryrun bool, path string, deleteAfterImport bool) Task {
+func NewImportFileTaskWithParams(dryrun bool, path string, deleteAfterImport bool) tasks.Task {
 	return &importFileTask{
 		Path:   path,
 		DryRun: dryrun,
@@ -32,7 +30,11 @@ func NewImportFileTaskWithParams(dryrun bool, path string, deleteAfterImport boo
 	}
 }
 
-func (t importFileTask) Execute(ctx context.Context, tasks TaskExecutor, lib library.PhotoLibrary) error {
+func (t importFileTask) Describe() string {
+	return fmt.Sprintf("Importing file %s", t.Path)
+}
+
+func (t importFileTask) Execute(ctx context.Context, tasks tasks.TaskExecutor, lib library.PhotoLibrary) error {
 	log := logging.From(ctx).Named("import")
 	img, err := domain.NewPhoto(t.Path)
 	if err != nil {

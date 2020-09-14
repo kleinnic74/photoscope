@@ -3,7 +3,7 @@ package rest
 import (
 	"context"
 	"errors"
-	"image"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -49,16 +49,16 @@ func (lib *testLib) Add(ctx context.Context, p domain.Photo) error {
 	return nil
 }
 
-func (lib *testLib) FindAll(ctx context.Context) []domain.Photo {
-	return lib.photos
+func (lib *testLib) FindAll(ctx context.Context) ([]domain.Photo, error) {
+	return lib.photos, nil
 }
 
-func (lib *testLib) FindAllPaged(ctx context.Context, start, max uint) ([]domain.Photo, bool) {
-	return lib.photos, false
+func (lib *testLib) FindAllPaged(ctx context.Context, start, max uint) ([]domain.Photo, bool, error) {
+	return lib.photos, false, nil
 }
 
-func (lib *testLib) Find(ctx context.Context, start, end time.Time) []domain.Photo {
-	return lib.photos
+func (lib *testLib) Find(ctx context.Context, start, end time.Time) ([]domain.Photo, error) {
+	return lib.photos, nil
 }
 
 func (lib *testLib) Get(ctx context.Context, id string) (domain.Photo, error) {
@@ -70,7 +70,11 @@ func (lib *testLib) Get(ctx context.Context, id string) (domain.Photo, error) {
 	return nil, library.NotFound(id)
 }
 
-func (lib *testLib) Thumb(ctx context.Context, id string, size domain.ThumbSize) (image.Image, domain.Format, error) {
+func (lib *testLib) OpenContent(ctx context.Context, id string) (io.ReadCloser, domain.Format, error) {
+	return nil, nil, errors.New("Not implemented")
+}
+
+func (lib *testLib) OpenThumb(ctx context.Context, id string, size domain.ThumbSize) (io.ReadCloser, domain.Format, error) {
 	return nil, nil, errors.New("Not implemented")
 }
 

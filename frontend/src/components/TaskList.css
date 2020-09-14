@@ -1,0 +1,12 @@
+ul.TaskList {
+    list-style-type:  none;
+}
+
+.TaskList li.pending {
+    font-style: italic;
+    color: gray;
+}
+
+.TaskList li.running {
+    font-style: normal;
+}

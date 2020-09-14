@@ -17,16 +17,15 @@ import (
 
 const (
 	defaultDirMode = 0755
-	dbName         = "photos.db"
 )
 
 // PhotoLibrary represents the operations on a library of photos
 type PhotoLibrary interface {
 	Add(ctx context.Context, photo domain.Photo) error
 	Get(ctx context.Context, id string) (domain.Photo, error)
-	FindAll(ctx context.Context) []domain.Photo
-	FindAllPaged(ctx context.Context, start, maxCount uint) ([]domain.Photo, bool)
-	Find(ctx context.Context, start, end time.Time) []domain.Photo
+	FindAll(ctx context.Context) ([]domain.Photo, error)
+	FindAllPaged(ctx context.Context, start, maxCount uint) ([]domain.Photo, bool, error)
+	Find(ctx context.Context, start, end time.Time) ([]domain.Photo, error)
 
 	OpenContent(ctx context.Context, id string) (io.ReadCloser, domain.Format, error)
 	OpenThumb(ctx context.Context, id string, size domain.ThumbSize) (io.ReadCloser, domain.Format, error)
@@ -37,9 +36,9 @@ type Store interface {
 	Exists(dateTaken time.Time, id string) bool
 	Add(*Photo) error
 	Get(id string) (*Photo, error)
-	FindAll() []*Photo
-	FindAllPaged(start, maxCount uint) ([]*Photo, bool)
-	Find(start, end time.Time) []*Photo
+	FindAll() ([]*Photo, error)
+	FindAllPaged(start, maxCount uint) ([]*Photo, bool, error)
+	Find(start, end time.Time) ([]*Photo, error)
 }
 
 // ClosableStore is a Store that can be closed
@@ -89,22 +88,12 @@ func PhotoAlreadyExists(id string) error {
 }
 
 // NewBasicPhotoLibrary creates a new photo library at the given directory using the given meta-data store provider function
-func NewBasicPhotoLibrary(basedir string, store StoreBuilder) (*BasicPhotoLibrary, error) {
+func NewBasicPhotoLibrary(basedir string, store ClosableStore) (*BasicPhotoLibrary, error) {
 	absdir, err := filepath.Abs(basedir)
 	if err != nil {
 		return nil, err
 	}
-	if info, err := os.Stat(absdir); err != nil {
-		err = os.MkdirAll(absdir, defaultDirMode)
-		if err != nil {
-			return nil, err
-		}
-	} else if !info.IsDir() {
-		err = fmt.Errorf("%s exists but is not a directory", absdir)
-		return nil, err
-	}
-	db, err := store(absdir, dbName)
-	if err != nil {
+	if err := os.MkdirAll(absdir, defaultDirMode); err != nil {
 		return nil, err
 	}
 	photosDir := filepath.Join(absdir, "photos")
@@ -119,7 +108,7 @@ func NewBasicPhotoLibrary(basedir string, store StoreBuilder) (*BasicPhotoLibrar
 		basedir:  absdir,
 		photodir: photosDir,
 		dirMode:  defaultDirMode,
-		db:       db,
+		db:       store,
 
 		thumbdir:    thumbsDir,
 		thumbFormat: domain.MustFormatForExt("jpg"),
@@ -146,7 +135,7 @@ func (lib *BasicPhotoLibrary) Add(ctx context.Context, photo domain.Photo) error
 		path:      filepath.Join(targetDir, name),
 		id:        id,
 		dateTaken: photo.DateTaken().UTC(),
-		location:  *photo.Location(),
+		location:  photo.Location(),
 		format:    photo.Format(),
 	}
 	logging.From(ctx).Info("Added", zap.String("photo", id), zap.Any("location", p.location))
@@ -164,36 +153,41 @@ func (lib *BasicPhotoLibrary) Get(ctx context.Context, id string) (domain.Photo,
 }
 
 // FindAll returns all photos from the underlying store
-func (lib *BasicPhotoLibrary) FindAll(ctx context.Context) []domain.Photo {
+func (lib *BasicPhotoLibrary) FindAll(ctx context.Context) ([]domain.Photo, error) {
 	var result = make([]domain.Photo, 0)
-	for _, p := range lib.db.FindAll() {
-		p.lib = lib
-		result = append(result, p)
-	}
-	return result
-}
-
-// FindAllPaged returns maximum maxCount photos from the underlying store starting
-// at start index
-func (lib *BasicPhotoLibrary) FindAllPaged(ctx context.Context, start, maxCount uint) ([]domain.Photo, bool) {
-	var result = make([]domain.Photo, 0)
-	photos, hasMore := lib.db.FindAllPaged(start, maxCount)
+	photos, err := lib.db.FindAll()
 	for _, p := range photos {
 		p.lib = lib
 		result = append(result, p)
 	}
-	return result, hasMore
+	return result, err
+}
+
+// FindAllPaged returns maximum maxCount photos from the underlying store starting
+// at start index
+func (lib *BasicPhotoLibrary) FindAllPaged(ctx context.Context, start, maxCount uint) ([]domain.Photo, bool, error) {
+	var result = make([]domain.Photo, 0)
+	photos, hasMore, err := lib.db.FindAllPaged(start, maxCount)
+	for _, p := range photos {
+		p.lib = lib
+		result = append(result, p)
+	}
+	return result, hasMore, err
 }
 
 // Find returns all photos stored in this library that have been taken between
 // the given start and end times
-func (lib *BasicPhotoLibrary) Find(ctx context.Context, start, end time.Time) []domain.Photo {
+func (lib *BasicPhotoLibrary) Find(ctx context.Context, start, end time.Time) ([]domain.Photo, error) {
 	var result = make([]domain.Photo, 0)
-	for _, p := range lib.db.Find(start, end) {
+	photos, err := lib.db.Find(start, end)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range photos {
 		p.lib = lib
 		result = append(result, p)
 	}
-	return result
+	return result, nil
 }
 
 func (lib *BasicPhotoLibrary) OpenContent(ctx context.Context, id string) (io.ReadCloser, domain.Format, error) {

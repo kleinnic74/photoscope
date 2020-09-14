@@ -2,24 +2,22 @@ import React from 'react'
 import PropTypes from 'prop-types'
 
 function Navbar(props) {
-    if (props.links) {
-        const links = props.links.map(l => (
-            <button onClick={(ev) => props.onClick(l.href)}>{l.name}</button>
-        ))
-        return (
-            <div className="navbav">
-                {links}
-            </div>
-        )
-    } else {
-        return (<div className="navbar"></div>)
+    console.log("Links:", props.links)
+    var links = []
+    for (const [name, l] of Object.entries(props.links)) {
+        links.push(<button key={l.href} onClick={(ev) => props.onClick(l.href)}>{name}</button>)
     }
+    return (
+        <div className="navbav">
+            {links}
+        </div>
+    )
 }
 
 Navbar.propTypes = {
-    links: PropTypes.arrayOf(PropTypes.object)
+    links: PropTypes.object
 }
 Navbar.defaultProps = {
-    links: []
+    links: {}
 }
 export default Navbar

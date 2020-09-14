@@ -2,13 +2,11 @@ package wdav
 
 import (
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/google/uuid"
-	"golang.org/x/net/webdav"
 )
 
 type closeCallback func(node *fsNode) error
@@ -86,9 +84,6 @@ func (n *fsNode) Sys() interface{} {
 }
 
 // Interface webdav.File
-
-var n webdav.File = &fsNode{}
-var h http.File = &fsNode{}
 
 func (n *fsNode) Close() error {
 	if n.file != nil {

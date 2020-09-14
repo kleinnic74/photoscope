@@ -21,7 +21,7 @@ type Photo struct {
 	id        string
 	format    domain.Format
 	dateTaken time.Time
-	location  gps.Coordinates
+	location  *gps.Coordinates
 }
 
 func (p *Photo) ID() string {
@@ -41,7 +41,7 @@ func (p *Photo) DateTaken() time.Time {
 }
 
 func (p *Photo) Location() *gps.Coordinates {
-	return &p.location
+	return p.location
 }
 
 func (p *Photo) Content() (io.ReadCloser, error) {
@@ -65,11 +65,11 @@ func (p *Photo) Image() (image.Image, error) {
 
 func (p *Photo) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
-		Path      string          `json:"path"`
-		ID        string          `json:"id"`
-		Format    string          `json:"format"`
-		DateTaken int64           `json:"dateUN,omitempty"`
-		Location  gps.Coordinates `json:"gps,omitempty"`
+		Path      string           `json:"path"`
+		ID        string           `json:"id"`
+		Format    string           `json:"format"`
+		DateTaken int64            `json:"dateUN,omitempty"`
+		Location  *gps.Coordinates `json:"gps,omitempty"`
 	}{
 		Path:      p.path,
 		ID:        p.id,
@@ -81,11 +81,11 @@ func (p *Photo) MarshalJSON() ([]byte, error) {
 
 func (p *Photo) UnmarshalJSON(buf []byte) error {
 	data := struct {
-		Path      string          `json:"path"`
-		ID        string          `json:"id"`
-		Format    string          `json:"format"`
-		DateTaken int64           `json:"dateUN"`
-		Location  gps.Coordinates `json:"gps"`
+		Path      string           `json:"path"`
+		ID        string           `json:"id"`
+		Format    string           `json:"format"`
+		DateTaken int64            `json:"dateUN"`
+		Location  *gps.Coordinates `json:"gps"`
 	}{}
 	err := json.Unmarshal(buf, &data)
 	if err != nil {

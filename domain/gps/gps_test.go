@@ -40,8 +40,8 @@ func TestMarshalUnmarshalJSON(t *testing.T) {
 
 func BenchmarkMNarshalJSON(b *testing.B) {
 	coords := Coordinates{
-		lat:  12.3456,
-		long: 23.2344,
+		Lat:  12.3456,
+		Long: 23.2344,
 	}
 	for i := 0; i < b.N; i++ {
 		_, err := json.Marshal(coords)

@@ -39,9 +39,9 @@ func From(ctx context.Context) *zap.Logger {
 	return l.(*zap.Logger)
 }
 
-func SubFrom(ctx context.Context, name string) (context.Context, *zap.Logger) {
+func SubFrom(ctx context.Context, name string) (*zap.Logger, context.Context) {
 	logger := From(ctx).Named(name)
-	return Context(ctx, logger), logger
+	return logger, Context(ctx, logger)
 }
 
 func Context(ctx context.Context, logger *zap.Logger) context.Context {
@@ -49,6 +49,12 @@ func Context(ctx context.Context, logger *zap.Logger) context.Context {
 		logger = rootLogger
 	}
 	return context.WithValue(ctx, loggerKey, logger)
+}
+
+func FromWithNameAndFields(ctx context.Context, name string, fields ...zapcore.Field) (*zap.Logger, context.Context) {
+	logger := From(ctx).With(fields...).Named(name)
+	ctx = Context(ctx, logger)
+	return logger, ctx
 }
 
 func FromWithFields(ctx context.Context, fields ...zapcore.Field) (*zap.Logger, context.Context) {

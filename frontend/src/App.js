@@ -1,15 +1,18 @@
-import React from 'react';
-import './App.css';
+import React from 'react'
+import './App.css'
 import {
   BrowserRouter as Router,
   Switch,
   Link,
   Route,
   Redirect
-} from 'react-router-dom';
-import Photos from './pages/Photos';
+} from 'react-router-dom'
+import Photos from './pages/Photos'
+import Tasks from './pages/Tasks'
 
 function App() {
+  const baseURL = 'http://localhost:8080'
+  console.log("Base URL", baseURL)
   return (
     <Router>
     <div className="App">
@@ -21,19 +24,17 @@ function App() {
           </ul>
         </nav>
       </div>
-      <div className="Content">
         <Switch>
           <Route path="/photos">
-            <Photos baseURL="http://localhost:8080" />
+            <Photos baseURL={baseURL} />
           </Route>
           <Route path="/tasks">
-            <div>Current tasks...</div>
+            <Tasks baseURL={baseURL} />
           </Route>
           <Route path="/">
             <Redirect to="/photos"/>
           </Route>
         </Switch>
-      </div>
     </div>
     </Router>
   );

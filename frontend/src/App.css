@@ -1,8 +1,7 @@
 .App {
   display: grid;
   grid-template-columns: 20% auto;
-  height: 100vh;
-  width: 100vw;
+  margin: 1rem;
 }
 
 .Menu {
@@ -11,12 +10,5 @@
 
 .Content {
   grid-column: 2 / 3;
-  width: 100%;
+  overflow: hidden;
 }
-
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
-}
-

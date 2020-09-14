@@ -76,9 +76,11 @@ func (dav *WebDavAdapter) OpenFile(ctx context.Context, name string, flag int, p
 		parent.Add(f)
 		return f, nil
 	} else {
+		parts := splitPath(name)
+		node, err := dav.findNode(parts)
 		logging.From(ctx).Info("OpenFile", zap.String("name", name), zap.String("flags", strconv.FormatInt(int64(flag), 2)))
+		return node, err
 	}
-	return nil, os.ErrNotExist
 }
 
 func (dav *WebDavAdapter) RemoveAll(ctx context.Context, name string) error {

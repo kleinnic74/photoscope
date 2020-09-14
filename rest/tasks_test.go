@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"bitbucket.org/kleinnic74/photos/importer"
 	"bitbucket.org/kleinnic74/photos/tasks"
 	"github.com/gorilla/mux"
 
@@ -14,8 +15,9 @@ import (
 )
 
 func TestGetTaskDefinitions(t *testing.T) {
+	repo := tasks.NewTaskRepository()
 	executor := tasks.NewDummyTaskExecutor()
-	api := NewTaskHandler(executor)
+	api := NewTaskHandler(repo, executor)
 	router := mux.NewRouter()
 	api.InitRoutes(router)
 
@@ -36,8 +38,9 @@ func TestGetTaskDefinitions(t *testing.T) {
 }
 
 func TestPostTask(t *testing.T) {
+	repo := tasks.NewTaskRepository()
 	executor := tasks.NewDummyTaskExecutor()
-	api := NewTaskHandler(executor)
+	api := NewTaskHandler(repo, executor)
 	router := mux.NewRouter()
 	api.InitRoutes(router)
 
@@ -60,17 +63,19 @@ func TestPostTask(t *testing.T) {
 }
 
 func TestTaskJSON(t *testing.T) {
+	repo := tasks.NewTaskRepository()
+	importer.RegisterTasks(repo)
 	data := []struct {
 		json string
 		task tasks.Task
 	}{
-		{json: `{"type":"import","parameters":{"dryrun":true,"importdir":"/path/to/dir"}}`,
-			task: tasks.NewImportTaskWithParams(true, "/path/to/dir")},
-		{json: `{"type":"import","parameters":{"importdir":"/path/to/dir"}}`,
-			task: tasks.NewImportTaskWithParams(false, "/path/to/dir")},
+		{json: `{"type":"importDir","parameters":{"dryrun":true,"importdir":"/path/to/dir"}}`,
+			task: importer.NewImportTaskWithParams(true, "/path/to/dir")},
+		{json: `{"type":"importDir","parameters":{"importdir":"/path/to/dir"}}`,
+			task: importer.NewImportTaskWithParams(false, "/path/to/dir")},
 	}
 	for _, d := range data {
-		task, err := parseTask(strings.NewReader(d.json))
+		task, err := parseTask(repo, strings.NewReader(d.json))
 		if err != nil {
 			t.Fatalf("Failed to parse '%s': %s", d.json, err)
 		}

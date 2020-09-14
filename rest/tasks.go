@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"sort"
 
 	"bitbucket.org/kleinnic74/photos/rest/cursor"
 	"bitbucket.org/kleinnic74/photos/tasks"
@@ -11,11 +12,12 @@ import (
 )
 
 type TaskHandler struct {
+	tasks    *tasks.TaskRepository
 	executor tasks.TaskExecutor
 }
 
-func NewTaskHandler(executor tasks.TaskExecutor) *TaskHandler {
-	return &TaskHandler{executor: executor}
+func NewTaskHandler(repo *tasks.TaskRepository, executor tasks.TaskExecutor) *TaskHandler {
+	return &TaskHandler{tasks: repo, executor: executor}
 }
 
 func (h *TaskHandler) InitRoutes(r *mux.Router) {
@@ -25,7 +27,7 @@ func (h *TaskHandler) InitRoutes(r *mux.Router) {
 }
 
 func (h *TaskHandler) getTaskDefinitions(w http.ResponseWriter, r *http.Request) {
-	defined := tasks.DefinedTasks()
+	defined := h.tasks.DefinedTasks()
 	respondWithJSON(w, http.StatusOK, &simplePayload{Data: defined})
 }
 
@@ -35,7 +37,7 @@ type task struct {
 }
 
 func (h *TaskHandler) postTask(w http.ResponseWriter, r *http.Request) {
-	task, err := parseTask(r.Body)
+	task, err := parseTask(h.tasks, r.Body)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, err)
 		return
@@ -48,17 +50,18 @@ func (h *TaskHandler) postTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TaskHandler) listTasks(w http.ResponseWriter, r *http.Request) {
-	tasks := h.executor.ListTasks(r.Context())
-	respondWithJSON(w, http.StatusOK, cursor.Unpaged(tasks))
+	t := h.executor.ListTasks(r.Context())
+	sort.Sort(tasks.ExecutionsBySubmission(t))
+	respondWithJSON(w, http.StatusOK, cursor.Unpaged(t))
 }
 
-func parseTask(in io.Reader) (t tasks.Task, err error) {
+func parseTask(repo *tasks.TaskRepository, in io.Reader) (t tasks.Task, err error) {
 	var tmp task
 	err = json.NewDecoder(in).Decode(&tmp)
 	if err != nil {
 		return
 	}
-	t, err = tasks.CreateTask(tmp.Type)
+	t, err = repo.CreateTask(tmp.Type)
 	if err != nil {
 		return
 	}

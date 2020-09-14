@@ -34,16 +34,19 @@ func TestUnmarshalJSON(t *testing.T) {
 }
 
 func TestMarshallJSON(t *testing.T) {
-	p := Photo{
-		id:        "id",
-		path:      "to/file",
-		format:    domain.MustFormatForExt("jpg"),
-		location:  gps.NewCoordinates(12, 34),
-		dateTaken: time.Now(),
-	}
-	dateUN := p.dateTaken.UnixNano()
-	assert.Equal(t, "[12.000000;34.000000]", p.location.String())
-	expected := `{
+	data := []struct {
+		Photo Photo
+		JSON  string
+	}{
+		{
+			Photo: Photo{
+				id:        "id",
+				path:      "to/file",
+				format:    domain.MustFormatForExt("jpg"),
+				location:  gps.NewCoordinates(12, 34),
+				dateTaken: time.Now(),
+			},
+			JSON: `{
   "path": "to/file",
   "id": "id",
   "format": "jpg",
@@ -52,13 +55,16 @@ func TestMarshallJSON(t *testing.T) {
     "lat": 12,
     "long": 34
   }
-}`
-	expected = fmt.Sprintf(expected, dateUN)
-	out, err := json.MarshalIndent(&p, "", "  ")
-	if err != nil {
-		t.Errorf("JSON marhsalling failed: %s", err)
+}`,
+		},
 	}
-	if expected != string(out) {
+	for _, d := range data {
+		dateUN := d.Photo.dateTaken.UnixNano()
+		expected := fmt.Sprintf(d.JSON, dateUN)
+		out, err := json.MarshalIndent(&d.Photo, "", "  ")
+		if err != nil {
+			t.Errorf("JSON marhsalling failed: %s", err)
+		}
 		assert.Equal(t, expected, string(out))
 	}
 }
@@ -116,7 +122,7 @@ func at(year, month, day string) time.Time {
 	return t
 }
 
-func somewhere() gps.Coordinates {
+func somewhere() *gps.Coordinates {
 	return gps.NewCoordinates((rand.Float64()-0.5)*360,
 		(rand.Float64()-0.5)*90)
 }

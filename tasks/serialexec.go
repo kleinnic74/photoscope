@@ -84,12 +84,12 @@ func (t *serialTaskExecutor) DrainTasks(ctx context.Context) {
 			id := t.ids
 			t.ids = t.ids + 1
 			logger.Info("Task submitted", zap.Any("task", s.task), zap.Uint64("taskID", uint64(id)))
-			e := Execution{ID: id, Status: Pending, Submitted: s.submitted, task: s.task}
+			e := Execution{ID: id, Status: Pending, Submitted: s.submitted, task: s.task, Title: s.task.Describe()}
 			select {
 			case taskCh <- e:
 				e.Status = Running
 			default:
-				// Cannot submiit task yet
+				// Cannot submit task yet
 				pending = append(pending, e)
 			}
 			queue[id] = e

@@ -81,14 +81,14 @@ func guessMeta(fileinfo os.FileInfo) *MediaMetaData {
 	}
 }
 
-func NewPhotoFromFields(path string, taken time.Time, location gps.Coordinates, format string) Photo {
+func NewPhotoFromFields(path string, taken time.Time, location *gps.Coordinates, format string) Photo {
 	fullpath := filenameFromPath(path)
 	return &photoFile{
 		filename:  fullpath,
 		path:      path,
 		size:      0,
 		dateTaken: taken,
-		location:  &location,
+		location:  location,
 		format:    MustFormatForExt(format),
 	}
 }

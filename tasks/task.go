@@ -4,78 +4,41 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
-	"strings"
 	"time"
 
 	"bitbucket.org/kleinnic74/photos/library"
 	"bitbucket.org/kleinnic74/photos/logging"
-	"github.com/google/uuid"
-	"go.uber.org/zap"
 )
 
 type Task interface {
+	Describe() string
 	Execute(context.Context, TaskExecutor, library.PhotoLibrary) error
 }
 
 type TaskInitFunc func() Task
 
+type TaskProperties struct {
+	RunOnStart   bool
+	UserRunnable bool
+}
 type TaskDefinition struct {
+	TaskProperties
 	Name       string `json:"name"`
 	init       TaskInitFunc
 	Parameters []string `json:"parameters,omitempty"`
 }
 
 var (
-	taskTypes = map[string]TaskDefinition{}
-	ids       uint64
-	queue     []Execution
+	ids   uint64
+	queue []Execution
 
 	logger = logging.From(context.Background()).Named("tasks")
 )
 
-func Register(name string, init TaskInitFunc) {
-	taskType := init()
-	t := reflect.TypeOf(taskType)
-	switch t.Kind() {
-	case reflect.Ptr:
-		t = t.Elem()
-	}
-	log := logger.With(zap.String("type", name), zap.String("corrID", uuid.New().String()))
-	log.Info("Task type registered")
-	var parameters []string
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		tag, found := field.Tag.Lookup("json")
-		if !found || len(tag) == 0 {
-			continue
-		}
-		parameter := strings.SplitN(tag, ",", 2)[0]
-		parameters = append(parameters, parameter)
-		log.Info("Task parameter", zap.String("param", parameter))
-	}
-	taskTypes[name] = TaskDefinition{Name: name, init: init, Parameters: parameters}
-}
-
-func DefinedTasks() (tasks []TaskDefinition) {
-	for _, d := range taskTypes {
-		tasks = append(tasks, d)
-	}
-	return
-}
-
 type UndefinedTaskType string
 
 func (err UndefinedTaskType) Error() string {
-	return fmt.Sprintf("Undefined task type '%s'", err)
-}
-
-func CreateTask(taskType string) (Task, error) {
-	def, found := taskTypes[taskType]
-	if !found {
-		return nil, UndefinedTaskType(taskType)
-	}
-	return def.init(), nil
+	return fmt.Sprintf("Undefined task type '%s'", string(err))
 }
 
 type ExecutionStatus string
@@ -95,6 +58,7 @@ type Execution struct {
 	Submitted time.Time       `json:"submitted,omitempty"`
 	Completed time.Time       `json:"completed,omitempty"`
 	Error     error           `json:"error,omitempty"`
+	Title     string          `json:"title"`
 	task      Task
 }
 
@@ -105,3 +69,10 @@ type TaskExecutor interface {
 }
 
 var ErrExecutorNotRunning = errors.New("TaskExecutor is not running")
+
+// ExecutionsBySubmission allows sorting slices of Execution by ascending submission time
+type ExecutionsBySubmission []Execution
+
+func (a ExecutionsBySubmission) Len() int           { return len(a) }
+func (a ExecutionsBySubmission) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a ExecutionsBySubmission) Less(i, j int) bool { return a[i].Submitted.Before(a[j].Submitted) }

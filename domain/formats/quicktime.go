@@ -62,7 +62,7 @@ type Quicktime struct {
 	keys         map[uint32]string
 	Atoms        []*Atom
 	creationDate time.Time
-	coords       gps.Coordinates
+	coords       *gps.Coordinates
 }
 
 func (parent *Atom) Walk(f AtomWalker, level int) {
@@ -104,7 +104,7 @@ func (qt *Quicktime) DateTaken() time.Time {
 }
 
 func (qt *Quicktime) Location() *gps.Coordinates {
-	return &qt.coords
+	return qt.coords
 }
 
 func (qt *Quicktime) defineKey(i uint32, name string) {

@@ -61,6 +61,11 @@ var (
 	ErrNoEncoderAvailable = errors.New("No encoder available for this format")
 )
 
+var noopFormat = formatImpl{
+	typeID:     Picture,
+	metaReader: func(io.Reader, *MediaMetaData) error { return nil },
+}
+
 func init() {
 	RegisterFormat(Picture, "jpg", "image/jpeg", exifReader, jpeg.Decode, jpegEncode, imageResizer)
 	RegisterFormat(Video, "mov", "video/quicktime", quicktimeReader, nil, nil, nil)
@@ -88,6 +93,9 @@ func FormatForExt(ext string) (Format, bool) {
 }
 
 func MustFormatForExt(ext string) Format {
+	if ext == "" {
+		return noopFormat
+	}
 	f, found := formatsById[ext]
 	if !found {
 		panic(fmt.Errorf("Unkown format with extension '%s'", ext))
@@ -165,8 +173,7 @@ func exifReader(in io.Reader, meta *MediaMetaData) error {
 		meta.DateTaken = dateTaken
 	}
 	if lat, long, err := ex.LatLong(); err == nil {
-		c := gps.NewCoordinates(lat, long)
-		meta.Location = &c
+		meta.Location = gps.NewCoordinates(lat, long)
 	}
 	return nil
 }

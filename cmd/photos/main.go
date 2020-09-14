@@ -5,6 +5,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -12,19 +13,26 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/boltdb/bolt"
+	"github.com/gorilla/mux"
+	"go.uber.org/zap"
+
+	"bitbucket.org/kleinnic74/photos/consts"
+	"bitbucket.org/kleinnic74/photos/geocoding"
+	"bitbucket.org/kleinnic74/photos/importer"
 	"bitbucket.org/kleinnic74/photos/library"
 	"bitbucket.org/kleinnic74/photos/library/boltstore"
 	"bitbucket.org/kleinnic74/photos/logging"
 	"bitbucket.org/kleinnic74/photos/rest"
 	"bitbucket.org/kleinnic74/photos/rest/wdav"
 	"bitbucket.org/kleinnic74/photos/tasks"
-	"github.com/gorilla/mux"
-	"go.uber.org/zap"
-	"golang.org/x/net/webdav"
 )
 
 var (
+	dbName = "photos.db"
+
 	libDir string
+	uiDir  string
 	port   uint
 
 	logger *zap.Logger
@@ -37,46 +45,82 @@ func init() {
 		flag.PrintDefaults()
 	}
 	flag.StringVar(&libDir, "l", "gophotos", "Path to photo library")
+	flag.StringVar(&uiDir, "ui", "", "Path to the frontend static assets")
 	flag.UintVar(&port, "p", 8080, "HTTP server port")
 	ctx = logging.Context(context.Background(), nil)
 	logger = logging.From(ctx)
 
 	flag.Parse()
+
+	absdir, err := filepath.Abs(libDir)
+	if err != nil {
+		logger.Fatal("Could not determine path", zap.String("dir", libDir), zap.Error(err))
+	}
+	libDir = absdir
+}
+
+func initTasks(geoindex library.GeoIndex) *tasks.TaskRepository {
+	repo := tasks.NewTaskRepository()
+	tasks.RegisterTasks(repo)
+	importer.RegisterTasks(repo)
+	geocoding.RegisterTasks(repo, geoindex)
+	return repo
 }
 
 func main() {
 	//	classifier := NewEventClassifier()
-	lib, err := library.NewBasicPhotoLibrary(libDir, boltstore.NewBoltStore)
+	if info, err := os.Stat(libDir); err != nil {
+		err = os.MkdirAll(libDir, os.ModePerm)
+		if err != nil {
+			log.Fatal("Failed to create directory", zap.String("dir", libDir), zap.Error(err))
+		}
+	} else if !info.IsDir() {
+		log.Fatal("Not a directory", zap.String("dir", libDir))
+	}
+	db, err := bolt.Open(filepath.Join(libDir, dbName), 0600, nil)
+	if err != nil {
+		logger.Fatal("Failed to initialize library", zap.NamedError("err", err))
+	}
+	defer func() {
+		db.Close()
+	}()
+	store, err := boltstore.NewBoltStore(db)
+	if err != nil {
+		logger.Fatal("Failed to initialize library", zap.NamedError("err", err))
+	}
+	lib, err := library.NewBasicPhotoLibrary(libDir, store)
 	if err != nil {
 		logger.Fatal("Failed to initialize library", zap.NamedError("err", err))
 	}
 	logger.Info("Opened photo library", zap.String("path", libDir))
-	router := mux.NewRouter()
-	photoApp := rest.NewApp(lib)
-	photoApp.InitRoutes(router)
+	geoindex, err := boltstore.NewBoltGeoIndex(db)
 
+	taskRepo := initTasks(geoindex)
 	executor := tasks.NewSerialTaskExecutor(lib)
 	executorContext, cancelExecutor := context.WithCancel(ctx)
 	go executor.DrainTasks(executorContext)
-	tasksApp := rest.NewTaskHandler(executor)
+	go launchStartupTasks(ctx, taskRepo, executor)
+
+	// REST Handlers
+	router := mux.NewRouter()
+
+	photoApp := rest.NewApp(lib)
+	photoApp.InitRoutes(router)
+
+	tasksApp := rest.NewTaskHandler(taskRepo, executor)
 	tasksApp.InitRoutes(router)
 
 	tmpdir := filepath.Join(libDir, "tmp")
-	wdav, err := wdav.NewWebDavAdapter(tmpdir, func(ctx context.Context, path string) {
-		task := tasks.NewImportFileTaskWithParams(false, path, true)
-		if _, err := executor.Submit(ctx, task); err != nil {
-			logging.From(ctx).Warn("Could not import file", zap.String("path", path), zap.Error(err))
-		}
-	})
+	wdav, err := wdav.NewWebDavHandler(tmpdir, backgroundImport(executor))
 	if err != nil {
-		logger.Fatal("Failed to launch photos", zap.Error(err))
+		logger.Fatal("Error initializing webdav interface", zap.Error(err))
 	}
-	dav := &webdav.Handler{
-		Prefix:     "/dav/",
-		LockSystem: webdav.NewMemLS(),
-		FileSystem: wdav,
+	router.PathPrefix("/dav/").Handler(wdav)
+	if consts.IsDevMode() && uiDir != "" {
+		router.PathPrefix("/").Handler(http.FileServer(http.Dir(uiDir)))
+	} else {
+		router.PathPrefix("/").Handler(rest.Embedder())
 	}
-	router.PathPrefix("/dav/").HandlerFunc(dav.ServeHTTP)
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
@@ -142,4 +186,27 @@ func main() {
 	// }
 	// defer out.Close()
 	// png.Encode(out, img)
+}
+
+func launchStartupTasks(ctx context.Context, tasksRepo *tasks.TaskRepository, executor tasks.TaskExecutor) {
+	for _, t := range tasksRepo.DefinedTasks() {
+		if t.RunOnStart {
+			logging.From(ctx).Debug("Launching startup task", zap.String("task", t.Name))
+			task, err := tasksRepo.CreateTask(t.Name)
+			if err != nil {
+				logging.From(ctx).Warn("StartupTasks", zap.Error(err))
+				continue
+			}
+			executor.Submit(ctx, task)
+		}
+	}
+}
+
+func backgroundImport(executor tasks.TaskExecutor) wdav.UploadedFunc {
+	return func(ctx context.Context, path string) {
+		task := importer.NewImportFileTaskWithParams(false, path, true)
+		if _, err := executor.Submit(ctx, task); err != nil {
+			logging.From(ctx).Warn("Could not import file", zap.String("path", path), zap.Error(err))
+		}
+	}
 }

@@ -1,12 +1,14 @@
-package tasks
+package importer
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 
 	"bitbucket.org/kleinnic74/photos/library"
 	"bitbucket.org/kleinnic74/photos/logging"
+	"bitbucket.org/kleinnic74/photos/tasks"
 	"go.uber.org/zap"
 )
 
@@ -21,23 +23,31 @@ var (
 	}
 )
 
-func init() {
-	Register("importDir", NewImportDirTask)
+func RegisterTasks(repo *tasks.TaskRepository) {
+	repo.Register("importDir", NewImportDirTask)
+	repo.Register("importFile", NewImportFileTask)
 }
 
-func NewImportDirTask() Task {
+func NewImportDirTask() tasks.Task {
 	return &importDirTask{}
 }
 
-func NewImportTaskWithParams(dryrun bool, dir string) Task {
+func NewImportTaskWithParams(dryrun bool, dir string) tasks.Task {
 	return &importDirTask{
 		Importdir: dir,
 		DryRun:    dryrun,
 	}
 }
 
-func (t importDirTask) Execute(ctx context.Context, tasks TaskExecutor, lib library.PhotoLibrary) error {
-	ctx, logger := logging.SubFrom(ctx, "importTask")
+func (t importDirTask) Describe() string {
+	if t.DryRun {
+		return fmt.Sprintf("Dry-run import directory %s", t.Importdir)
+	}
+	return fmt.Sprintf("Importing photos from %s", t.Importdir)
+}
+
+func (t importDirTask) Execute(ctx context.Context, tasks tasks.TaskExecutor, lib library.PhotoLibrary) error {
+	logger, ctx := logging.SubFrom(ctx, "importTask")
 	logger.Info("Importing photos", zap.String("dir", t.Importdir))
 	var count uint
 	defer func() {
@@ -66,7 +76,7 @@ func (t importDirTask) Execute(ctx context.Context, tasks TaskExecutor, lib libr
 	}
 }
 
-func (t importDirTask) importImage(ctx context.Context, path string, tasks TaskExecutor) error {
+func (t importDirTask) importImage(ctx context.Context, path string, tasks tasks.TaskExecutor) error {
 	task := NewImportFileTaskWithParams(false, path, false)
 	_, err := tasks.Submit(ctx, task)
 	return err

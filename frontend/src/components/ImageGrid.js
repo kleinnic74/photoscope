@@ -6,8 +6,6 @@ import './ImageGrid.css'
 export default class ImageGrid extends Component {
     static propTypes = {
         baseURL: PropTypes.string.isRequired,
-        rows: PropTypes.number.isRequired,
-        cols: PropTypes.number.isRequired,
         images: PropTypes.array,
     }
 
@@ -18,26 +16,15 @@ export default class ImageGrid extends Component {
     }
 
     render() {
-        const rows = Array(this.props.rows).fill().map((_, i) =>
-            <tr key={i}>
-                {Array(this.props.cols).fill().map((_, j) => {
-                    const index = i*this.props.cols+j
-                    if (index < this.props.images.length) {
-                        const img = this.props.images[index]
-                        const src = `${this.props.baseURL}${img.links.thumb}`
-                        return <td key={j}><Image src={src} alt={img.name} /></td>
-                    } else {
-                        return <td key={j}></td>
-                    }
-                })}
-            </tr>
-        )
+        const images = this.props.images.map((i, idx) => {
+            const thumb = `${this.props.baseURL}${i.links.thumb}`
+            const img = `${this.props.baseURL}${i.links.view}`
+            return <Image key={thumb} src={thumb} alt={i.name} onClick={(ev) => this.props.onShow(img, idx)}/>
+        })
         return (
-            <table className="ImageGrid">
-                <tbody>
-                    {rows}
-                </tbody>
-            </table>
+            <div className="ImageGrid">
+                    {images}
+            </div>
         )
     }
 }

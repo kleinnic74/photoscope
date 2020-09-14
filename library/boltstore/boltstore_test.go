@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"bitbucket.org/kleinnic74/photos/library"
+	"github.com/boltdb/bolt"
 )
 
 const (
@@ -31,7 +32,7 @@ func TestAddThenFindAll(t *testing.T) {
 		if err := db.Add(photo); err != nil {
 			t.Fatalf("Failed to add photo: %s", err)
 		}
-		found := db.FindAll()
+		found, _ := db.FindAll()
 		if len(found) != 1 {
 			t.Fatalf("Bad number of photos returned, expected %d, got %d", 1, len(found))
 		}
@@ -57,13 +58,18 @@ func TestAddThenGet(t *testing.T) {
 
 func BenchmarkAdd(b *testing.B) {
 	// Initialize store
-	db, err := NewBoltStore(dbpath, dbfile)
+	dbFile := filepath.Join(dbpath, dbfile)
+	boltDb, err := bolt.Open(dbFile, 0644, nil)
+	if err != nil {
+		b.Fatal(err)
+	}
+	db, err := NewBoltStore(boltDb)
 	if err != nil {
 		b.Fatal(err)
 	}
 	defer func() {
 		db.Close()
-		os.Remove("/tmp/photos.db")
+		os.Remove(dbFile)
 	}()
 
 	b.Run("Add a photo", func(b *testing.B) {
@@ -105,7 +111,11 @@ func runTestWithStore(t *testing.T, test TestFunc) {
 	defer deleteIfExists(t, fullpath)
 	os.Mkdir(dbpath, 0755)
 	func(t *testing.T) {
-		db, err := NewBoltStore(dbpath, dbfile)
+		boltDB, err := bolt.Open(fullpath, 0644, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		db, err := NewBoltStore(boltDB)
 		if err != nil {
 			t.Fatal(err)
 		}
