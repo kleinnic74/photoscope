@@ -21,14 +21,18 @@ const (
 
 // PhotoLibrary represents the operations on a library of photos
 type PhotoLibrary interface {
-	Add(ctx context.Context, photo domain.Photo) error
-	Get(ctx context.Context, id string) (domain.Photo, error)
-	FindAll(ctx context.Context) ([]domain.Photo, error)
-	FindAllPaged(ctx context.Context, start, maxCount uint) ([]domain.Photo, bool, error)
-	Find(ctx context.Context, start, end time.Time) ([]domain.Photo, error)
+	Add(ctx context.Context, photo domain.Photo, content io.Reader) error
+	Get(ctx context.Context, id string) (*Photo, error)
+	FindAll(ctx context.Context) ([]*Photo, error)
+	FindAllPaged(ctx context.Context, start, maxCount int) ([]*Photo, bool, error)
+	Find(ctx context.Context, start, end time.Time) ([]*Photo, error)
 
 	OpenContent(ctx context.Context, id string) (io.ReadCloser, domain.Format, error)
 	OpenThumb(ctx context.Context, id string, size domain.ThumbSize) (io.ReadCloser, domain.Format, error)
+}
+
+type PhotoIndex interface {
+	Add(ctx context.Context, photo *Photo) error
 }
 
 // Store represents a persistent storage of photo meta-data
@@ -37,7 +41,7 @@ type Store interface {
 	Add(*Photo) error
 	Get(id string) (*Photo, error)
 	FindAll() ([]*Photo, error)
-	FindAllPaged(start, maxCount uint) ([]*Photo, bool, error)
+	FindAllPaged(start, maxCount int) ([]*Photo, bool, error)
 	Find(start, end time.Time) ([]*Photo, error)
 }
 
@@ -48,8 +52,7 @@ type ClosableStore interface {
 	Close()
 }
 
-// StoreBuilder function to create a store at the given directory with the given name
-type StoreBuilder func(string, string) (ClosableStore, error)
+type NewPhotoCallback func(ctx context.Context, p *Photo)
 
 // BasicPhotoLibrary is a library storing photos on the filesystem
 type BasicPhotoLibrary struct {
@@ -60,6 +63,8 @@ type BasicPhotoLibrary struct {
 
 	thumbdir    string
 	thumbFormat domain.Format
+
+	callbacks []NewPhotoCallback
 }
 
 // ReaderFunc is a function providing an io.ReadCloser
@@ -115,79 +120,60 @@ func NewBasicPhotoLibrary(basedir string, store ClosableStore) (*BasicPhotoLibra
 	}, nil
 }
 
+func (lib *BasicPhotoLibrary) AddCallback(callback NewPhotoCallback) {
+	lib.callbacks = append(lib.callbacks, callback)
+}
+
 // Add adds a photo to this library. If the given photo already exists, then
 // an error of type PhotoAlreadyExists is returned
-func (lib *BasicPhotoLibrary) Add(ctx context.Context, photo domain.Photo) error {
+func (lib *BasicPhotoLibrary) Add(ctx context.Context, photo domain.Photo, content io.Reader) error {
 	ctx = logging.Context(ctx, logging.From(ctx).Named("library").With(zap.String("source", photo.Name())))
 	targetDir, name, id := canonicalizeFilename(photo)
 	if lib.db.Exists(photo.DateTaken().UTC(), id) {
 		return PhotoAlreadyExists(id)
 	}
-	content, err := photo.Content()
-	if err != nil {
-		return err
-	}
 	if err := lib.addPhotoFile(ctx, content, lib.photodir, targetDir, name); err != nil {
 		return err
 	}
+	path := filepath.Join(targetDir, name)
 	p := &Photo{
-		lib:       lib,
-		path:      filepath.Join(targetDir, name),
-		id:        id,
-		dateTaken: photo.DateTaken().UTC(),
-		location:  photo.Location(),
-		format:    photo.Format(),
+		Path:      path,
+		ID:        id,
+		DateTaken: photo.DateTaken().UTC(),
+		Location:  photo.Location(),
+		Format:    photo.Format(),
+		Size:      lib.fileSizeOf(filepath.Join(lib.photodir, path)),
 	}
-	logging.From(ctx).Info("Added", zap.String("photo", id), zap.Any("location", p.location))
-	return lib.db.Add(p)
+	logging.From(ctx).Info("Added", zap.String("photo", id), zap.Any("location", p.Location))
+	if err := lib.db.Add(p); err != nil {
+		return err
+	}
+	for _, cb := range lib.callbacks {
+		cb(ctx, p)
+	}
+	return nil
 }
 
 // Get returns the photo with the given ID
-func (lib *BasicPhotoLibrary) Get(ctx context.Context, id string) (domain.Photo, error) {
-	p, err := lib.db.Get(id)
-	if err != nil {
-		return nil, err
-	}
-	p.lib = lib
-	return p, err
+func (lib *BasicPhotoLibrary) Get(ctx context.Context, id string) (*Photo, error) {
+	return lib.db.Get(id)
 }
 
 // FindAll returns all photos from the underlying store
-func (lib *BasicPhotoLibrary) FindAll(ctx context.Context) ([]domain.Photo, error) {
-	var result = make([]domain.Photo, 0)
-	photos, err := lib.db.FindAll()
-	for _, p := range photos {
-		p.lib = lib
-		result = append(result, p)
-	}
-	return result, err
+func (lib *BasicPhotoLibrary) FindAll(ctx context.Context) ([]*Photo, error) {
+	return lib.db.FindAll()
 }
 
 // FindAllPaged returns maximum maxCount photos from the underlying store starting
 // at start index
-func (lib *BasicPhotoLibrary) FindAllPaged(ctx context.Context, start, maxCount uint) ([]domain.Photo, bool, error) {
-	var result = make([]domain.Photo, 0)
-	photos, hasMore, err := lib.db.FindAllPaged(start, maxCount)
-	for _, p := range photos {
-		p.lib = lib
-		result = append(result, p)
-	}
-	return result, hasMore, err
+func (lib *BasicPhotoLibrary) FindAllPaged(ctx context.Context, start, maxCount int) ([]*Photo, bool, error) {
+	return lib.db.FindAllPaged(start, maxCount)
 }
 
 // Find returns all photos stored in this library that have been taken between
 // the given start and end times
-func (lib *BasicPhotoLibrary) Find(ctx context.Context, start, end time.Time) ([]domain.Photo, error) {
-	var result = make([]domain.Photo, 0)
-	photos, err := lib.db.Find(start, end)
-	if err != nil {
-		return nil, err
-	}
-	for _, p := range photos {
-		p.lib = lib
-		result = append(result, p)
-	}
-	return result, nil
+func (lib *BasicPhotoLibrary) Find(ctx context.Context, start, end time.Time) ([]*Photo, error) {
+	return lib.db.Find(start, end)
 }
 
 func (lib *BasicPhotoLibrary) OpenContent(ctx context.Context, id string) (io.ReadCloser, domain.Format, error) {
@@ -195,8 +181,8 @@ func (lib *BasicPhotoLibrary) OpenContent(ctx context.Context, id string) (io.Re
 	if err != nil {
 		return nil, nil, err
 	}
-	reader, err := lib.openPhoto(p.path)
-	return reader, p.format, err
+	reader, err := lib.openPhoto(p.Path)
+	return reader, p.Format, err
 }
 
 func (lib *BasicPhotoLibrary) createDirectory(ctx context.Context, basedir, dir string) error {
@@ -211,7 +197,7 @@ func (lib *BasicPhotoLibrary) createDirectory(ctx context.Context, basedir, dir 
 	}
 }
 
-func (lib *BasicPhotoLibrary) addPhotoFile(ctx context.Context, in io.ReadCloser, basedir, targetDir, targetName string) error {
+func (lib *BasicPhotoLibrary) addPhotoFile(ctx context.Context, in io.Reader, basedir, targetDir, targetName string) error {
 	pathInLib := filepath.Join(basedir, targetDir, targetName)
 	log, ctx := logging.FromWithFields(ctx, zap.String("dest", pathInLib))
 	if _, err := os.Stat(pathInLib); err == nil {
@@ -230,7 +216,6 @@ func (lib *BasicPhotoLibrary) addPhotoFile(ctx context.Context, in io.ReadCloser
 		return err
 	}
 	defer out.Close()
-	defer in.Close()
 	_, err = io.Copy(out, in)
 	if err != nil {
 		log.Error("Could not copy photo to library", zap.Error(err))
@@ -261,7 +246,7 @@ func (lib *BasicPhotoLibrary) OpenThumb(ctx context.Context, id string, size dom
 		// Photo does not exist
 		return nil, nil, err
 	}
-	dir := filepath.Join(lib.thumbdir, photo.ID())
+	dir := filepath.Join(lib.thumbdir, photo.ID)
 	path := filepath.Join(dir, size.Name+".jpg")
 	if _, err := os.Stat(path); err != nil {
 		// Thumb does not exist yet
@@ -274,12 +259,12 @@ func (lib *BasicPhotoLibrary) OpenThumb(ctx context.Context, id string, size dom
 			}
 		}
 
-		baseImage, err := photo.Content()
+		baseImage, err := lib.openPhoto(photo.Path)
 		if err != nil {
 			logger.Error("Failed to open image content", zap.Error(err))
 			return nil, nil, err
 		}
-		thumb, err := photo.Format().Thumb(baseImage, domain.Small)
+		thumb, err := photo.Format.Thumb(baseImage, domain.Small)
 		if err != nil {
 			logger.Error("Failed to created thumb", zap.Error(err))
 			return nil, nil, err

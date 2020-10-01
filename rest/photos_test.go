@@ -41,29 +41,36 @@ func checkResponseCode(t *testing.T, expected int, response *http.Response) {
 }
 
 type testLib struct {
-	photos []domain.Photo
+	photos []*library.Photo
 }
 
-func (lib *testLib) Add(ctx context.Context, p domain.Photo) error {
-	lib.photos = append(lib.photos, p)
+func (lib *testLib) Add(ctx context.Context, p domain.Photo, content io.Reader) error {
+	lib.photos = append(lib.photos, &library.Photo{
+		ID:        p.ID(),
+		Path:      p.Name(),
+		DateTaken: p.DateTaken(),
+		Format:    p.Format(),
+		Location:  p.Location(),
+		Size:      p.SizeInBytes(),
+	})
 	return nil
 }
 
-func (lib *testLib) FindAll(ctx context.Context) ([]domain.Photo, error) {
+func (lib *testLib) FindAll(ctx context.Context) ([]*library.Photo, error) {
 	return lib.photos, nil
 }
 
-func (lib *testLib) FindAllPaged(ctx context.Context, start, max uint) ([]domain.Photo, bool, error) {
+func (lib *testLib) FindAllPaged(ctx context.Context, start, max int) ([]*library.Photo, bool, error) {
 	return lib.photos, false, nil
 }
 
-func (lib *testLib) Find(ctx context.Context, start, end time.Time) ([]domain.Photo, error) {
+func (lib *testLib) Find(ctx context.Context, start, end time.Time) ([]*library.Photo, error) {
 	return lib.photos, nil
 }
 
-func (lib *testLib) Get(ctx context.Context, id string) (domain.Photo, error) {
+func (lib *testLib) Get(ctx context.Context, id string) (*library.Photo, error) {
 	for _, p := range lib.photos {
-		if p.ID() == id {
+		if p.ID == id {
 			return p, nil
 		}
 	}
@@ -79,5 +86,5 @@ func (lib *testLib) OpenThumb(ctx context.Context, id string, size domain.ThumbS
 }
 
 func newPhotoLib() library.PhotoLibrary {
-	return &testLib{photos: make([]domain.Photo, 0)}
+	return &testLib{photos: make([]*library.Photo, 0)}
 }

@@ -69,13 +69,8 @@ func initTasks(geoindex library.GeoIndex) *tasks.TaskRepository {
 
 func main() {
 	//	classifier := NewEventClassifier()
-	if info, err := os.Stat(libDir); err != nil {
-		err = os.MkdirAll(libDir, os.ModePerm)
-		if err != nil {
-			log.Fatal("Failed to create directory", zap.String("dir", libDir), zap.Error(err))
-		}
-	} else if !info.IsDir() {
-		log.Fatal("Not a directory", zap.String("dir", libDir))
+	if err := os.MkdirAll(libDir, os.ModePerm); err != nil {
+		log.Fatal("Failed to create directory", zap.String("dir", libDir), zap.Error(err))
 	}
 	db, err := bolt.Open(filepath.Join(libDir, dbName), 0600, nil)
 	if err != nil {
@@ -90,16 +85,26 @@ func main() {
 	}
 	lib, err := library.NewBasicPhotoLibrary(libDir, store)
 	if err != nil {
-		logger.Fatal("Failed to initialize library", zap.NamedError("err", err))
+		logger.Fatal("Failed to initialize library", zap.Error(err))
 	}
 	logger.Info("Opened photo library", zap.String("path", libDir))
 	geoindex, err := boltstore.NewBoltGeoIndex(db)
+	if err != nil {
+		logger.Fatal("Failed to initialize geoindex", zap.Error(err))
+	}
+	dateindex, err := boltstore.NewDateIndex(db)
+	if err != nil {
+		logger.Fatal("Failed to initialize dataindex", zap.Error(err))
+	}
 
 	taskRepo := initTasks(geoindex)
 	executor := tasks.NewSerialTaskExecutor(lib)
 	executorContext, cancelExecutor := context.WithCancel(ctx)
 	go executor.DrainTasks(executorContext)
 	go launchStartupTasks(ctx, taskRepo, executor)
+
+	lib.AddCallback(geocoding.LookupPhotoOnAdd(executor, geoindex))
+	lib.AddCallback(library.IndexByDate(dateindex))
 
 	// REST Handlers
 	router := mux.NewRouter()

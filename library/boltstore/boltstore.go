@@ -26,8 +26,6 @@ type BoltStore struct {
 	indexes []interface{}
 }
 
-type IndexInitFunc func(*bolt.DB) (interface{}, error)
-
 // NewBoltStore creates a new BoltStore at the given location with the given name
 func NewBoltStore(db *bolt.DB) (lib library.ClosableStore, err error) {
 	lib = &BoltStore{
@@ -71,7 +69,7 @@ func (store *BoltStore) Exists(dateTaken time.Time, id string) bool {
 
 // Add adds the given photo to this store
 func (store *BoltStore) Add(p *library.Photo) error {
-	id := sortableID(p.DateTaken(), p.ID())
+	id := sortableID(p.DateTaken, p.ID)
 	encoded, err := json.Marshal(p)
 	if err != nil {
 		log.Printf("Error: failed to encode photo: %s", err)
@@ -80,14 +78,14 @@ func (store *BoltStore) Add(p *library.Photo) error {
 	return store.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket(photosBucket)
 		if existing := b.Get(id); existing != nil {
-			return library.PhotoAlreadyExists(p.ID())
+			return library.PhotoAlreadyExists(p.ID)
 		}
 		err = b.Put(id, encoded)
 		if err != nil {
 			return err
 		}
 		b = tx.Bucket(idMapBucket)
-		err = b.Put([]byte(p.ID()), id)
+		err = b.Put([]byte(p.ID), id)
 		return err
 	})
 }
@@ -101,9 +99,9 @@ func (store *BoltStore) FindAll() ([]*library.Photo, error) {
 }
 
 //FindAllPaged returns at most max photos from the store starting at photo index start
-func (store *BoltStore) FindAllPaged(start, max uint) ([]*library.Photo, bool, error) {
+func (store *BoltStore) FindAllPaged(start, max int) ([]*library.Photo, bool, error) {
 	return store.findRange(func(c Cursor) Cursor {
-		return c.Skip(start).Limit(max)
+		return c.Skip(uint(start)).Limit(uint(max))
 	})
 }
 

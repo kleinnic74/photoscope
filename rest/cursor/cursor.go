@@ -8,19 +8,19 @@ import (
 )
 
 type Cursor struct {
-	Start    uint
-	PageSize uint
+	Start    int
+	PageSize int
 }
 
-var defaultPageSize uint = 20
+var defaultPageSize int = 20
 
 func DecodeFromRequest(r *http.Request) Cursor {
 	cursor := Cursor{PageSize: defaultPageSize}
 	pageSizeStr := r.URL.Query().Get("p")
-	var pageSize uint
+	var pageSize int
 	if pageSizeStr != "" {
 		if pageSize64, err := strconv.ParseUint(pageSizeStr, 10, 0); err == nil {
-			pageSize = uint(pageSize64)
+			pageSize = int(pageSize64)
 			cursor.PageSize = pageSize
 		}
 	}
@@ -32,7 +32,7 @@ func DecodeFromRequest(r *http.Request) Cursor {
 	return cursor
 }
 
-func DecodeFromString(encoded string, defaultPageSize uint) Cursor {
+func DecodeFromString(encoded string, defaultPageSize int) Cursor {
 	cursor := Cursor{PageSize: defaultPageSize}
 	if encoded == "" {
 		return cursor

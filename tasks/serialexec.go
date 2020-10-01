@@ -117,7 +117,7 @@ func (t *serialTaskExecutor) DrainTasks(ctx context.Context) {
 			close(q)
 		case <-ctx.Done():
 			logger.Info("Task executor interrupted")
-			break
+			return
 		}
 	}
 }

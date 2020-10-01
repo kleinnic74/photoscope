@@ -45,7 +45,7 @@ func (t importFileTask) Execute(ctx context.Context, tasks tasks.TaskExecutor, l
 	if t.DryRun {
 		return nil
 	}
-	if err := lib.Add(ctx, img); err != nil {
+	if err := addToLibrary(ctx, img, lib); err != nil {
 		return err
 	}
 
@@ -60,4 +60,13 @@ func (t importFileTask) Execute(ctx context.Context, tasks tasks.TaskExecutor, l
 		log.Info("Deleted file", zap.String("file", t.Path))
 	}
 	return nil
+}
+
+func addToLibrary(ctx context.Context, img domain.Photo, lib library.PhotoLibrary) error {
+	content, err := img.Content()
+	if err != nil {
+		return err
+	}
+	defer content.Close()
+	return lib.Add(ctx, img, content)
 }

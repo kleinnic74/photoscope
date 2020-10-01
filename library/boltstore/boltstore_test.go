@@ -45,9 +45,9 @@ func TestAddThenGet(t *testing.T) {
 		if err := db.Add(photo); err != nil {
 			t.Fatalf("Failed to add photo: %s", err)
 		}
-		found, err := db.Get(photo.ID())
+		found, err := db.Get(photo.ID)
 		if err != nil {
-			t.Fatalf("Should have found a photo with id %s", photo.ID())
+			t.Fatalf("Should have found a photo with id %s", photo.ID)
 		}
 		if found == nil {
 			t.Fatalf("Returned nil and nil error, error should have been NotFound")
@@ -148,7 +148,7 @@ func assertPhotosAreEqual(t *testing.T, p1, p2 *library.Photo) {
 	if (p1 == nil || p2 == nil) && p1 != p2 {
 		t.Errorf("Both should be nil but are not: p1=%v, p2=%v", p1, p2)
 	}
-	if p1.ID() != p2.ID() {
-		t.Errorf("Different Id()s: p1: %s, p2: %s", p1.ID(), p2.ID())
+	if p1.ID != p2.ID {
+		t.Errorf("Different Id()s: p1: %s, p2: %s", p1.ID, p2.ID)
 	}
 }

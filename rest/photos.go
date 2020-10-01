@@ -53,7 +53,7 @@ func (a *App) getPhotos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	logging.From(r.Context()).Named("http").Info("/photos",
-		zap.Bool("hasMore", hasMore), zap.Uint("start", c.Start), zap.Uint("page", c.PageSize))
+		zap.Bool("hasMore", hasMore), zap.Int("start", c.Start), zap.Int("page", c.PageSize))
 	photoViews := make([]views.Photo, len(photos))
 	for i, p := range photos {
 		photoViews[i] = views.PhotoFrom(p)

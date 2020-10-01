@@ -27,10 +27,10 @@ func TestUnmarshalJSON(t *testing.T) {
 	if err := json.Unmarshal(data, &p); err != nil {
 		t.Fatalf("Failed to Unmarshal JSON: %s", err)
 	}
-	assertEquals(t, "format", "jpg", p.Format().ID())
-	assertEquals(t, "path", "2018/02/03", p.path)
-	assertEquals(t, "id", "12345678", p.id)
-	assertEquals(t, "gps.lat", "[45.123130;47.123445]", p.location.String())
+	assertEquals(t, "format", "jpg", p.Format.ID())
+	assertEquals(t, "path", "2018/02/03", p.Path)
+	assertEquals(t, "id", "12345678", p.ID)
+	assertEquals(t, "gps.lat", "[45.123130;47.123445]", p.Location.String())
 }
 
 func TestMarshallJSON(t *testing.T) {
@@ -40,15 +40,15 @@ func TestMarshallJSON(t *testing.T) {
 	}{
 		{
 			Photo: Photo{
-				id:        "id",
-				path:      "to/file",
-				format:    domain.MustFormatForExt("jpg"),
-				location:  gps.NewCoordinates(12, 34),
-				dateTaken: time.Now(),
+				ID:        "id",
+				Path:      "to/file",
+				Format:    domain.MustFormatForExt("jpg"),
+				Location:  gps.NewCoordinates(12, 34),
+				DateTaken: time.Now(),
 			},
 			JSON: `{
-  "path": "to/file",
   "id": "id",
+  "path": "to/file",
   "format": "jpg",
   "dateUN": %d,
   "gps": {
@@ -59,7 +59,7 @@ func TestMarshallJSON(t *testing.T) {
 		},
 	}
 	for _, d := range data {
-		dateUN := d.Photo.dateTaken.UnixNano()
+		dateUN := d.Photo.DateTaken.UnixNano()
 		expected := fmt.Sprintf(d.JSON, dateUN)
 		out, err := json.MarshalIndent(&d.Photo, "", "  ")
 		if err != nil {

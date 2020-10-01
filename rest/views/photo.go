@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"bitbucket.org/kleinnic74/photos/domain"
 	"bitbucket.org/kleinnic74/photos/domain/gps"
+	"bitbucket.org/kleinnic74/photos/library"
 )
 
 type Links map[string]string
@@ -34,22 +34,21 @@ type LinkProvider struct {
 	patterns map[string]string
 }
 
-func (p LinkProvider) LinksFor(object domain.Identifiable) Links {
+func (p LinkProvider) LinksFor(photo *library.Photo) Links {
 	links := make(Links)
-	id := object.ID()
 	for name, pattern := range p.patterns {
-		links[name] = fmt.Sprintf(pattern, id)
+		links[name] = fmt.Sprintf(pattern, photo.ID)
 	}
 	return links
 }
 
-func PhotoFrom(p domain.Photo) Photo {
+func PhotoFrom(p *library.Photo) Photo {
 	return Photo{
-		ID:        p.ID(),
+		ID:        p.ID,
 		Links:     PhotoLinksFor(p),
 		Name:      p.Name(),
-		DateTaken: p.DateTaken(),
-		Location:  p.Location(),
+		DateTaken: p.DateTaken,
+		Location:  p.Location,
 	}
 }
 
@@ -61,6 +60,6 @@ var photoLinks = LinkProvider{
 	},
 }
 
-func PhotoLinksFor(p domain.Photo) Links {
+func PhotoLinksFor(p *library.Photo) Links {
 	return photoLinks.LinksFor(p)
 }

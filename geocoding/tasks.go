@@ -58,14 +58,14 @@ func (t locationScannerTask) Execute(ctx context.Context, executor tasks.TaskExe
 	}
 	var count int
 	for _, p := range photos {
-		if p.Location() == nil {
+		if p.Location == nil {
 			continue
 		}
-		if t.geoindex.Has(ctx, p.ID()) {
+		if t.geoindex.Has(ctx, p.ID) {
 			continue
 		}
-		logger.Info("LocationUpgradeNeeded", zap.String("photo", p.ID()))
-		executor.Submit(ctx, NewGeoLookupTaskWith(t.geoindex, p.ID(), *p.Location()))
+		logger.Info("LocationUpgradeNeeded", zap.String("photo", p.ID))
+		executor.Submit(ctx, NewGeoLookupTaskWith(t.geoindex, p.ID, *p.Location))
 		count++
 	}
 	logger.Info("Location scan done", zap.Int("needLookup", count))
@@ -81,6 +81,19 @@ func NewGeoLookupTaskWith(index library.GeoIndex, id string, coords gps.Coordina
 		PhotoID:  id,
 		Coords:   coords,
 		geoindex: index,
+	}
+}
+
+func LookupPhotoOnAdd(executor tasks.TaskExecutor, index library.GeoIndex) library.NewPhotoCallback {
+	return func(ctx context.Context, p *library.Photo) {
+		if p.Location == nil {
+			return
+		}
+		task := NewGeoLookupTaskWith(index, p.ID, *p.Location)
+		if _, err := executor.Submit(ctx, task); err != nil {
+			log, _ := logging.FromWithNameAndFields(ctx, "geoLookupTask")
+			log.Warn("Defered lookup submission failed", zap.Error(err))
+		}
 	}
 }
 
