@@ -46,7 +46,7 @@ type testLib struct {
 
 func (lib *testLib) Add(ctx context.Context, p domain.Photo, content io.Reader) error {
 	lib.photos = append(lib.photos, &library.Photo{
-		ID:        p.ID(),
+		ID:        library.PhotoID(p.ID()),
 		Path:      p.Name(),
 		DateTaken: p.DateTaken(),
 		Format:    p.Format(),
@@ -68,7 +68,7 @@ func (lib *testLib) Find(ctx context.Context, start, end time.Time) ([]*library.
 	return lib.photos, nil
 }
 
-func (lib *testLib) Get(ctx context.Context, id string) (*library.Photo, error) {
+func (lib *testLib) Get(ctx context.Context, id library.PhotoID) (*library.Photo, error) {
 	for _, p := range lib.photos {
 		if p.ID == id {
 			return p, nil
@@ -77,11 +77,11 @@ func (lib *testLib) Get(ctx context.Context, id string) (*library.Photo, error) 
 	return nil, library.NotFound(id)
 }
 
-func (lib *testLib) OpenContent(ctx context.Context, id string) (io.ReadCloser, domain.Format, error) {
+func (lib *testLib) OpenContent(ctx context.Context, id library.PhotoID) (io.ReadCloser, *library.Photo, error) {
 	return nil, nil, errors.New("Not implemented")
 }
 
-func (lib *testLib) OpenThumb(ctx context.Context, id string, size domain.ThumbSize) (io.ReadCloser, domain.Format, error) {
+func (lib *testLib) OpenThumb(ctx context.Context, id library.PhotoID, size domain.ThumbSize) (io.ReadCloser, domain.Format, error) {
 	return nil, nil, errors.New("Not implemented")
 }
 

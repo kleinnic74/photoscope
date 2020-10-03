@@ -2,6 +2,8 @@ package tasks
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"time"
 
 	"bitbucket.org/kleinnic74/photos/library"
@@ -50,20 +52,25 @@ func (t *serialTaskExecutor) DrainTasks(ctx context.Context) {
 	t.queryCh = make(chan executionQuery)
 	taskCh := make(chan Execution)
 	resCh := make(chan Execution)
-	go func() {
-		log := logger.Named("Worker")
-		for e := range taskCh {
-			log.Info("Executing task", zap.Uint64("taskID", uint64(e.ID)))
-			e.Error = e.task.Execute(ctx, t, t.photos)
-			if e.Error != nil {
-				e.Status = Error
-			} else {
-				e.Status = Completed
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			log := logger.Named(fmt.Sprintf("Worker-%d", id))
+			for e := range taskCh {
+				log.Info("Executing task", zap.Uint64("taskID", uint64(e.ID)))
+				e.Error = e.task.Execute(ctx, t, t.photos)
+				if e.Error != nil {
+					e.Status = Error
+				} else {
+					e.Status = Completed
+				}
+				resCh <- e
 			}
-			resCh <- e
-		}
-		log.Info("Terminating")
-	}()
+			log.Info("Terminating")
+		}(i)
+	}
 	defer func() {
 		close(taskCh)
 		for s := range t.submitCh {
@@ -74,6 +81,7 @@ func (t *serialTaskExecutor) DrainTasks(ctx context.Context) {
 			close(q)
 		}
 		close(t.queryCh)
+		wg.Wait()
 	}()
 	var pending []Execution
 	t.running = true

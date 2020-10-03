@@ -59,29 +59,28 @@ func init() {
 	libDir = absdir
 }
 
-func initTasks(geoindex library.GeoIndex) *tasks.TaskRepository {
-	repo := tasks.NewTaskRepository()
-	tasks.RegisterTasks(repo)
-	importer.RegisterTasks(repo)
-	geocoding.RegisterTasks(repo, geoindex)
-	return repo
-}
-
 func main() {
 	//	classifier := NewEventClassifier()
 	if err := os.MkdirAll(libDir, os.ModePerm); err != nil {
 		log.Fatal("Failed to create directory", zap.String("dir", libDir), zap.Error(err))
 	}
+
+	taskRepo := tasks.NewTaskRepository()
+	tasks.RegisterTasks(taskRepo)
+	importer.RegisterTasks(taskRepo)
+
 	db, err := bolt.Open(filepath.Join(libDir, dbName), 0600, nil)
 	if err != nil {
-		logger.Fatal("Failed to initialize library", zap.NamedError("err", err))
+		logger.Fatal("Failed to initialize library", zap.Error(err))
 	}
-	defer func() {
-		db.Close()
-	}()
+	defer db.Close()
+	indexTracker, err := boltstore.NewIndexTracker(db)
+	if err != nil {
+		logger.Fatal("Failed to initialize library", zap.Error(err))
+	}
 	store, err := boltstore.NewBoltStore(db)
 	if err != nil {
-		logger.Fatal("Failed to initialize library", zap.NamedError("err", err))
+		logger.Fatal("Failed to initialize library", zap.Error(err))
 	}
 	lib, err := library.NewBasicPhotoLibrary(libDir, store)
 	if err != nil {
@@ -92,25 +91,35 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to initialize geoindex", zap.Error(err))
 	}
+	geocoding.RegisterTasks(taskRepo, geoindex)
+
 	dateindex, err := boltstore.NewDateIndex(db)
 	if err != nil {
 		logger.Fatal("Failed to initialize dataindex", zap.Error(err))
 	}
 
-	taskRepo := initTasks(geoindex)
 	executor := tasks.NewSerialTaskExecutor(lib)
 	executorContext, cancelExecutor := context.WithCancel(ctx)
 	go executor.DrainTasks(executorContext)
-	go launchStartupTasks(ctx, taskRepo, executor)
 
-	lib.AddCallback(geocoding.LookupPhotoOnAdd(executor, geoindex))
-	lib.AddCallback(library.IndexByDate(dateindex))
+	indexer := NewIndexer(indexTracker, executor)
+	indexer.RegisterDirect("date", dateindex.Add)
+	indexer.RegisterDefered("geo", geocoding.LookupPhotoOnAdd(geoindex))
+
+	indexer.RegisterTasks(taskRepo)
+
+	lib.AddCallback(indexer.Add)
+
+	go launchStartupTasks(ctx, taskRepo, executor)
 
 	// REST Handlers
 	router := mux.NewRouter()
 
 	photoApp := rest.NewApp(lib)
 	photoApp.InitRoutes(router)
+
+	timeline := rest.NewTimelineHandler(dateindex, lib)
+	timeline.InitRoutes(router)
 
 	tasksApp := rest.NewTaskHandler(taskRepo, executor)
 	tasksApp.InitRoutes(router)

@@ -44,22 +44,23 @@ export default class Photos extends Component {
         return `${this.props.baseURL}${part}`
     }
 
-    fetchImages(cursor, showFirst) {
+    fetchImages(cursor, showImage, index) {
         const params = cursor ? { c: cursor } : {}
         axios.get(this.props.baseURL + '/photos', {
             params: params
         })
             .then(response => response.data)
             .then(data => {
+                const i = index < 0 ? data.data.length-1 : index || 0
                 this.setState({
                     images: data.data,
                     links: data.links?.reduce((map,l) => {
                         map[l.name] = l
                         return map
                     }, {}),
-                    showImage: showFirst,
-                    index: 0,
-                    image: this.absURL(data.data[0].links.view)
+                    showImage: showImage,
+                    index: i,
+                    image: this.absURL(data.data[i].links.view)
                 })
             })
             .catch(error => console.log(error))
@@ -73,7 +74,7 @@ export default class Photos extends Component {
         this.setState((prevState) => {
             var next = prevState.index + 1
             if (next >= prevState.images.length) {
-                this.fetchImages(prevState.links.next.href,true)
+                this.fetchImages(prevState.links.next.href,true,0)
                 return {}
             }
             var img = this.absURL(prevState.images[next].links.view)
@@ -90,9 +91,9 @@ export default class Photos extends Component {
             var prev = prevState.index-1
             if (prev < 0) {
                 if (prevState.links.previous) {
-                    this.fetchImages(prevState.links.previous.href, true)
+                    this.fetchImages(prevState.links.previous.href, true, -1)
                 }
-                return {}
+                return {} 
             }
             var img = this.absURL(prevState.images[prev].links.view)
             return {

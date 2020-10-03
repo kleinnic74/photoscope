@@ -1,7 +1,9 @@
 package library
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"os"
@@ -19,40 +21,7 @@ const (
 	defaultDirMode = 0755
 )
 
-// PhotoLibrary represents the operations on a library of photos
-type PhotoLibrary interface {
-	Add(ctx context.Context, photo domain.Photo, content io.Reader) error
-	Get(ctx context.Context, id string) (*Photo, error)
-	FindAll(ctx context.Context) ([]*Photo, error)
-	FindAllPaged(ctx context.Context, start, maxCount int) ([]*Photo, bool, error)
-	Find(ctx context.Context, start, end time.Time) ([]*Photo, error)
-
-	OpenContent(ctx context.Context, id string) (io.ReadCloser, domain.Format, error)
-	OpenThumb(ctx context.Context, id string, size domain.ThumbSize) (io.ReadCloser, domain.Format, error)
-}
-
-type PhotoIndex interface {
-	Add(ctx context.Context, photo *Photo) error
-}
-
-// Store represents a persistent storage of photo meta-data
-type Store interface {
-	Exists(dateTaken time.Time, id string) bool
-	Add(*Photo) error
-	Get(id string) (*Photo, error)
-	FindAll() ([]*Photo, error)
-	FindAllPaged(start, maxCount int) ([]*Photo, bool, error)
-	Find(start, end time.Time) ([]*Photo, error)
-}
-
-// ClosableStore is a Store that can be closed
-type ClosableStore interface {
-	Store
-
-	Close()
-}
-
-type NewPhotoCallback func(ctx context.Context, p *Photo)
+type NewPhotoCallback func(ctx context.Context, p *Photo) error
 
 // BasicPhotoLibrary is a library storing photos on the filesystem
 type BasicPhotoLibrary struct {
@@ -76,20 +45,25 @@ func wrap(in io.ReadCloser) ReaderFunc {
 	}
 }
 
-type ErrNotFound string
+type ErrNotFound PhotoID
 
 func (e ErrNotFound) Error() string {
 	return fmt.Sprintf("No photo with id %s", string(e))
 }
 
 // NotFound Error to indicate that the photo with the given id does not exist
-func NotFound(id string) error {
+func NotFound(id PhotoID) error {
 	return ErrNotFound(id)
 }
 
 // PhotoAlreadyExists Error to indicate that the photo with the given id already exists
-func PhotoAlreadyExists(id string) error {
+func PhotoAlreadyExists(id PhotoID) error {
 	return fmt.Errorf("Photo already exists: id=%s", id)
+}
+
+// PhotoFileAlreadyExists indicates that a given photo file already exists in the library
+func PhotoFileAlreadyExists(path string) error {
+	return fmt.Errorf("Photo already exists at path=%s", path)
 }
 
 // NewBasicPhotoLibrary creates a new photo library at the given directory using the given meta-data store provider function
@@ -129,10 +103,15 @@ func (lib *BasicPhotoLibrary) AddCallback(callback NewPhotoCallback) {
 func (lib *BasicPhotoLibrary) Add(ctx context.Context, photo domain.Photo, content io.Reader) error {
 	ctx = logging.Context(ctx, logging.From(ctx).Named("library").With(zap.String("source", photo.Name())))
 	targetDir, name, id := canonicalizeFilename(photo)
-	if lib.db.Exists(photo.DateTaken().UTC(), id) {
-		return PhotoAlreadyExists(id)
+	content, hash, err := loadContent(content)
+	if err != nil {
+		return err
 	}
-	if err := lib.addPhotoFile(ctx, content, lib.photodir, targetDir, name); err != nil {
+	if dup, exists := lib.db.Exists(hash); exists {
+		return PhotoAlreadyExists(dup)
+	}
+	size, err := lib.addPhotoFile(ctx, content, lib.photodir, targetDir, name)
+	if err != nil {
 		return err
 	}
 	path := filepath.Join(targetDir, name)
@@ -142,9 +121,9 @@ func (lib *BasicPhotoLibrary) Add(ctx context.Context, photo domain.Photo, conte
 		DateTaken: photo.DateTaken().UTC(),
 		Location:  photo.Location(),
 		Format:    photo.Format(),
-		Size:      lib.fileSizeOf(filepath.Join(lib.photodir, path)),
+		Size:      size,
 	}
-	logging.From(ctx).Info("Added", zap.String("photo", id), zap.Any("location", p.Location))
+	logging.From(ctx).Info("Added", zap.String("photo", string(id)), zap.Any("location", p.Location))
 	if err := lib.db.Add(p); err != nil {
 		return err
 	}
@@ -155,7 +134,7 @@ func (lib *BasicPhotoLibrary) Add(ctx context.Context, photo domain.Photo, conte
 }
 
 // Get returns the photo with the given ID
-func (lib *BasicPhotoLibrary) Get(ctx context.Context, id string) (*Photo, error) {
+func (lib *BasicPhotoLibrary) Get(ctx context.Context, id PhotoID) (*Photo, error) {
 	return lib.db.Get(id)
 }
 
@@ -176,13 +155,15 @@ func (lib *BasicPhotoLibrary) Find(ctx context.Context, start, end time.Time) ([
 	return lib.db.Find(start, end)
 }
 
-func (lib *BasicPhotoLibrary) OpenContent(ctx context.Context, id string) (io.ReadCloser, domain.Format, error) {
+// OpenContent returns an io.ReadCloser on the content of the photo with the given ID.
+// The caller is responsible to close the reader
+func (lib *BasicPhotoLibrary) OpenContent(ctx context.Context, id PhotoID) (io.ReadCloser, *Photo, error) {
 	p, err := lib.db.Get(id)
 	if err != nil {
 		return nil, nil, err
 	}
 	reader, err := lib.openPhoto(p.Path)
-	return reader, p.Format, err
+	return reader, p, err
 }
 
 func (lib *BasicPhotoLibrary) createDirectory(ctx context.Context, basedir, dir string) error {
@@ -197,32 +178,32 @@ func (lib *BasicPhotoLibrary) createDirectory(ctx context.Context, basedir, dir 
 	}
 }
 
-func (lib *BasicPhotoLibrary) addPhotoFile(ctx context.Context, in io.Reader, basedir, targetDir, targetName string) error {
+func (lib *BasicPhotoLibrary) addPhotoFile(ctx context.Context, in io.Reader, basedir, targetDir, targetName string) (int64, error) {
 	pathInLib := filepath.Join(basedir, targetDir, targetName)
 	log, ctx := logging.FromWithFields(ctx, zap.String("dest", pathInLib))
 	if _, err := os.Stat(pathInLib); err == nil {
 		// File already exists
-		return PhotoAlreadyExists(filepath.Join(targetDir, targetName))
+		return 0, PhotoFileAlreadyExists(filepath.Join(targetDir, targetName))
 	}
 	log.Debug("Adding...")
 	err := lib.createDirectory(ctx, basedir, targetDir)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	// Does not exist yet, copy
 	out, err := os.Create(pathInLib)
 	if err != nil {
 		log.Error("Could not add photo", zap.Error(err))
-		return err
+		return 0, err
 	}
 	defer out.Close()
-	_, err = io.Copy(out, in)
+	size, err := io.Copy(out, in)
 	if err != nil {
 		log.Error("Could not copy photo to library", zap.Error(err))
-		return err
+		return 0, err
 	}
 	log.Info("Added photo")
-	return nil
+	return size, nil
 }
 
 func (lib *BasicPhotoLibrary) openPhoto(path string) (io.ReadCloser, error) {
@@ -237,20 +218,19 @@ func (lib *BasicPhotoLibrary) fileSizeOf(path string) int64 {
 	return info.Size()
 }
 
-func (lib *BasicPhotoLibrary) OpenThumb(ctx context.Context, id string, size domain.ThumbSize) (io.ReadCloser, domain.Format, error) {
-	ctx = logging.Context(ctx, logging.From(ctx).Named("library").With(zap.String("photo", id)))
-	logger := logging.From(ctx)
+func (lib *BasicPhotoLibrary) OpenThumb(ctx context.Context, id PhotoID, size domain.ThumbSize) (io.ReadCloser, domain.Format, error) {
+	logger, ctx := logging.FromWithNameAndFields(ctx, "library", zap.String("photo", string(id)))
 
 	photo, err := lib.Get(ctx, id)
 	if err != nil {
 		// Photo does not exist
 		return nil, nil, err
 	}
-	dir := filepath.Join(lib.thumbdir, photo.ID)
+	dir := filepath.Join(lib.thumbdir, string(photo.ID))
 	path := filepath.Join(dir, size.Name+".jpg")
 	if _, err := os.Stat(path); err != nil {
 		// Thumb does not exist yet
-		logger = logger.With(zap.String("photo", id), zap.String("thumb", path))
+		logger = logger.With(zap.String("thumb", path))
 		start := time.Now()
 		logger.Debug("Creating thumbnail")
 		if _, err := os.Stat(dir); err != nil {
@@ -286,12 +266,23 @@ func (lib *BasicPhotoLibrary) OpenThumb(ctx context.Context, id string, size dom
 	return f, lib.thumbFormat, nil
 }
 
-func canonicalizeFilename(photo domain.Photo) (dir, filename, id string) {
+func canonicalizeFilename(photo domain.Photo) (dir, filename string, id PhotoID) {
 	dir = photo.DateTaken().Format("2006/01/02")
 	filename = fmt.Sprintf("%s.%s", photo.ID(), photo.Format().ID())
 	h := mmh3.New128()
 	h.Write([]byte(photo.DateTaken().Format(time.RFC3339)))
 	h.Write([]byte(strings.ToLower(filename)))
-	id = fmt.Sprintf("%x", h.Sum(nil))
+	id = PhotoID(fmt.Sprintf("%x", h.Sum(nil)))
 	return
+}
+
+func loadContent(in io.Reader) (io.Reader, BinaryHash, error) {
+	h := mmh3.New128()
+	in = io.TeeReader(in, h)
+	content := new(bytes.Buffer)
+	if _, err := io.Copy(content, in); err != nil {
+		return nil, "", err
+	}
+	hash := BinaryHash(base64.StdEncoding.EncodeToString(h.Sum(nil)))
+	return content, hash, nil
 }

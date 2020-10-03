@@ -45,6 +45,7 @@ test:
 .PHONY: clean
 clean:
 	rm -fr $(BINDIR)
+	rm embed/embedded_resources.go
 	go clean ./...
 
 .PHONY: run
@@ -60,8 +61,8 @@ rundev: GO_VARS=-X 'bitbucket.org/kleinnic74/photos/consts.devmode=true'
 generate: embed/embedded_resources.go
 
 embed/embedded_resources.go: frontend/build
-	go generate ./embed
+	rm -f embed/embedded_resources.go && go generate ./embed
 
-frontend/build: frontend/src/* frontend/public/*
+frontend/build: $(wildcard frontend/src/**/*) $(wildcard frontend/public/**/*)
 	cd frontend && npm run build
-	touch fontend/build
+	pwd && touch frontend/build

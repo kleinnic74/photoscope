@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 )
 
+// DateIndex indexes photos by date
 type DateIndex struct {
 	db *bolt.DB
 }
@@ -23,6 +24,8 @@ var (
 	datesBucket = []byte(datesBucketName)
 )
 
+// NewDateIndex returns a DateIndex stored in the given BoltDB. If the needed buckets
+// do not exist, they will be created
 func NewDateIndex(db *bolt.DB) (*DateIndex, error) {
 	if err := db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists(datesBucket)
@@ -33,6 +36,7 @@ func NewDateIndex(db *bolt.DB) (*DateIndex, error) {
 	return &DateIndex{db: db}, nil
 }
 
+// Add will add the given photo to this date index based on its taken time
 func (d *DateIndex) Add(ctx context.Context, photo *library.Photo) error {
 	return d.db.Update(func(tx *bolt.Tx) error {
 		log, _ := logging.FromWithNameAndFields(ctx, "boltdateindex")
@@ -47,7 +51,8 @@ func (d *DateIndex) Add(ctx context.Context, photo *library.Photo) error {
 	})
 }
 
-func (d *DateIndex) FindRange(ctx context.Context, from, to time.Time) (ids []string, err error) {
+// FindRange returns all photos in the given date range
+func (d *DateIndex) FindRange(ctx context.Context, from, to time.Time) (ids []library.PhotoID, err error) {
 	from, to = startOfDay(from), endOfDay(to)
 	err = d.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(datesBucket)
@@ -59,7 +64,7 @@ func (d *DateIndex) FindRange(ctx context.Context, from, to time.Time) (ids []st
 			}
 			c := dayBucket.Cursor()
 			for k, _ := c.First(); k != nil; k, _ = c.Next() {
-				ids = append(ids, string(k))
+				ids = append(ids, library.PhotoID(k))
 			}
 		}
 		return nil
@@ -67,6 +72,24 @@ func (d *DateIndex) FindRange(ctx context.Context, from, to time.Time) (ids []st
 	return
 }
 
+// Keys returns the timeline of indeed photos
+func (d *DateIndex) Keys(context.Context) (timeline library.Timeline, err error) {
+	err = d.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(datesBucket)
+		c := b.Cursor()
+		for k, _ := c.First(); k != nil; k, _ = c.Next() {
+			day, err := time.Parse("2006-01-02", string(k))
+			if err != nil {
+				return err
+			}
+			timeline.Add(day, string(k))
+		}
+		return nil
+	})
+	return
+}
+
+// FindDates returns the days for which photos have been indexed
 func (d *DateIndex) FindDates(ctx context.Context) (dates []time.Time, err error) {
 	log := logging.From(ctx)
 	err = d.db.View(func(tx *bolt.Tx) error {

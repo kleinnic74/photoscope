@@ -17,6 +17,7 @@ import (
 
 var (
 	photosBucket = []byte("photos")
+	hashBucket   = []byte("photoHashes")
 	idMapBucket  = []byte("idmap")
 )
 
@@ -37,6 +38,9 @@ func NewBoltStore(db *bolt.DB) (lib library.ClosableStore, err error) {
 	if err = createBucket(db, idMapBucket); err != nil {
 		return
 	}
+	if err = createBucket(db, hashBucket); err != nil {
+		return
+	}
 	return
 }
 
@@ -52,24 +56,23 @@ func createBucket(db *bolt.DB, name []byte) error {
 
 // Close closes this store
 func (store *BoltStore) Close() {
-	store.db.Close()
 }
 
 // Exists checks if a photo with the given id on the given date exists in this store
-func (store *BoltStore) Exists(dateTaken time.Time, id string) bool {
-	key := sortableID(dateTaken, id)
-	var exists bool
+func (store *BoltStore) Exists(hash library.BinaryHash) (other library.PhotoID, exists bool) {
 	store.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket(photosBucket)
-		exists = b.Get(key) != nil
+		b := tx.Bucket(hashBucket)
+		id := b.Get(hash.Bytes())
+		exists = id != nil
+		other = library.PhotoID(id)
 		return nil
 	})
-	return exists
+	return
 }
 
 // Add adds the given photo to this store
 func (store *BoltStore) Add(p *library.Photo) error {
-	id := sortableID(p.DateTaken, p.ID)
+	id := sortableID(p.DateTaken, string(p.ID))
 	encoded, err := json.Marshal(p)
 	if err != nil {
 		log.Printf("Error: failed to encode photo: %s", err)
@@ -154,7 +157,7 @@ func (store *BoltStore) Find(start, end time.Time) ([]*library.Photo, error) {
 }
 
 // Get returns the photo with the given id
-func (store *BoltStore) Get(id string) (*library.Photo, error) {
+func (store *BoltStore) Get(id library.PhotoID) (*library.Photo, error) {
 	var found *library.Photo
 	return found, store.db.View(func(tx *bolt.Tx) error {
 		internalID := tx.Bucket(idMapBucket).Get([]byte(id))

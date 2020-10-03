@@ -66,12 +66,12 @@ func main() {
 		if info.IsDir() {
 			return nil
 		}
-		b, err := ioutil.ReadFile(path)
+		b, err := ioutil.ReadFile(absPath)
 		if err != nil {
 			log.Printf("Failed to read %s: %s", path, err)
 			return err
 		}
-		log.Printf("Embedding: %s", relPath)
+		log.Printf("Embedding: %s", absPath)
 		files = append(files, res{Name: relPath, Data: b, Index: len(files)})
 		return nil
 	})

@@ -105,7 +105,9 @@ func TestByteOrderOfId(t *testing.T) {
 	}
 }
 
-func runTestWithStore(t *testing.T, test TestFunc) {
+type BoltDBTestFunc func(t *testing.T, db *bolt.DB)
+
+func runTestWithBoltDB(t *testing.T, test BoltDBTestFunc) {
 	fullpath := filepath.Join(dbpath, dbfile)
 	deleteIfExists(t, fullpath)
 	defer deleteIfExists(t, fullpath)
@@ -115,6 +117,14 @@ func runTestWithStore(t *testing.T, test TestFunc) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		defer boltDB.Close()
+		test(t, boltDB)
+	}(t)
+
+}
+
+func runTestWithStore(t *testing.T, test TestFunc) {
+	runTestWithBoltDB(t, func(t *testing.T, boltDB *bolt.DB) {
 		db, err := NewBoltStore(boltDB)
 		if err != nil {
 			t.Fatal(err)
@@ -126,7 +136,7 @@ func runTestWithStore(t *testing.T, test TestFunc) {
 		default:
 			t.Fatalf("Bad type: %s", boltStore)
 		}
-	}(t)
+	})
 }
 
 func deleteIfExists(t *testing.T, file string) {

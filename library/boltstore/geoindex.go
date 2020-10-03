@@ -26,7 +26,7 @@ func NewBoltGeoIndex(db *bolt.DB) (library.GeoIndex, error) {
 	}, nil
 }
 
-func (index *boltGeoIndex) Has(ctx context.Context, id string) (exists bool) {
+func (index *boltGeoIndex) Has(ctx context.Context, id library.PhotoID) (exists bool) {
 	logger, ctx := logging.FromWithNameAndFields(ctx, "geoStore")
 	err := index.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(placesBucket)
@@ -34,12 +34,12 @@ func (index *boltGeoIndex) Has(ctx context.Context, id string) (exists bool) {
 		return nil
 	})
 	if err != nil {
-		logger.Warn("Bolt error", zap.String("photo", id), zap.Error(err))
+		logger.Warn("Bolt error", zap.String("photo", string(id)), zap.Error(err))
 	}
 	return
 }
 
-func (index *boltGeoIndex) Get(ctx context.Context, id string) (address *gps.Address, found bool, err error) {
+func (index *boltGeoIndex) Get(ctx context.Context, id library.PhotoID) (address *gps.Address, found bool, err error) {
 	logger, ctx := logging.FromWithNameAndFields(ctx, "geoStore")
 	if err := index.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(placesBucket)
@@ -51,13 +51,13 @@ func (index *boltGeoIndex) Get(ctx context.Context, id string) (address *gps.Add
 		address = new(gps.Address)
 		return json.Unmarshal(data, address)
 	}); err != nil {
-		logger.Warn("Bolt error", zap.String("photo", id), zap.Error(err))
+		logger.Warn("Bolt error", zap.String("photo", string(id)), zap.Error(err))
 		return nil, false, err
 	}
 	return
 }
 
-func (index *boltGeoIndex) Update(ctx context.Context, id string, address *gps.Address) error {
+func (index *boltGeoIndex) Update(ctx context.Context, id library.PhotoID, address *gps.Address) error {
 	if address == nil {
 		return nil
 	}

@@ -15,6 +15,8 @@ type Task interface {
 	Execute(context.Context, TaskExecutor, library.PhotoLibrary) error
 }
 
+type DeferredNewPhotoCallback func(ctx context.Context, photo *library.Photo) (Task, bool)
+
 type TaskInitFunc func() Task
 
 type TaskProperties struct {

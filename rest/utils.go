@@ -15,10 +15,10 @@ func respondWithError(w http.ResponseWriter, status int, err error) {
 }
 
 func respondWithJSON(w http.ResponseWriter, status int, payload interface{}) {
-	response, _ := json.Marshal(payload)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	w.Write(response)
+	encoder := json.NewEncoder(w)
+	encoder.Encode(payload)
 }
 
 func respondWithBinary(w http.ResponseWriter, mime string, size int64, data io.Reader) {

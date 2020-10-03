@@ -29,7 +29,7 @@ func TestUnmarshalJSON(t *testing.T) {
 	}
 	assertEquals(t, "format", "jpg", p.Format.ID())
 	assertEquals(t, "path", "2018/02/03", p.Path)
-	assertEquals(t, "id", "12345678", p.ID)
+	assertEquals(t, "id", "12345678", string(p.ID))
 	assertEquals(t, "gps.lat", "[45.123130;47.123445]", p.Location.String())
 }
 
@@ -98,7 +98,7 @@ func TestCanonicalizePhoto(t *testing.T) {
 		actualPath, actualName, id := canonicalizeFilename(tt.photo)
 		assertEquals(t, "name", tt.expectedName, actualName)
 		assertEquals(t, "path", tt.expectedPath, actualPath)
-		assertNotEmpty(t, "id", id)
+		assertNotEmpty(t, "id", string(id))
 	}
 }
 

@@ -2,7 +2,6 @@ import React from 'react'
 import PropTypes from 'prop-types'
 
 function Navbar(props) {
-    console.log("Links:", props.links)
     var links = []
     for (const [name, l] of Object.entries(props.links)) {
         links.push(<button key={l.href} onClick={(ev) => props.onClick(l.href)}>{name}</button>)

@@ -10,73 +10,28 @@ import (
 	"bitbucket.org/kleinnic74/photos/tasks"
 	"go.uber.org/zap"
 
-	"github.com/codingsince1985/geo-golang"
 	"github.com/codingsince1985/geo-golang/openstreetmap"
 )
 
-var resolver geo.Geocoder
+var resolver = openstreetmap.Geocoder()
 
 func RegisterTasks(repo *tasks.TaskRepository, index library.GeoIndex) {
-	resolver = openstreetmap.Geocoder()
-	repo.RegisterWithProperties(
-		"scanForGeoUnresolvedPhotos",
-		func() tasks.Task {
-			return NewLocationScannerTask(index)
-		},
-		tasks.TaskProperties{
-			RunOnStart: true,
-		},
-	)
 	repo.Register("geoResolve", func() tasks.Task {
 		return NewGeoLookupTask(index)
 	})
 }
 
-type locationScannerTask struct {
-	geoindex library.GeoIndex
-}
-
 type geoLookupTask struct {
-	PhotoID  string          `json:"photoID"`
+	PhotoID  library.PhotoID `json:"photoID"`
 	Coords   gps.Coordinates `json:"gps"`
 	geoindex library.GeoIndex
-}
-
-func NewLocationScannerTask(index library.GeoIndex) tasks.Task {
-	return locationScannerTask{geoindex: index}
-}
-
-func (t locationScannerTask) Describe() string {
-	return "Looking for photos with unresolved location data"
-}
-
-func (t locationScannerTask) Execute(ctx context.Context, executor tasks.TaskExecutor, lib library.PhotoLibrary) error {
-	logger, ctx := logging.SubFrom(ctx, "locationScanner")
-	photos, err := lib.FindAll(ctx)
-	if err != nil {
-		return err
-	}
-	var count int
-	for _, p := range photos {
-		if p.Location == nil {
-			continue
-		}
-		if t.geoindex.Has(ctx, p.ID) {
-			continue
-		}
-		logger.Info("LocationUpgradeNeeded", zap.String("photo", p.ID))
-		executor.Submit(ctx, NewGeoLookupTaskWith(t.geoindex, p.ID, *p.Location))
-		count++
-	}
-	logger.Info("Location scan done", zap.Int("needLookup", count))
-	return nil
 }
 
 func NewGeoLookupTask(index library.GeoIndex) tasks.Task {
 	return geoLookupTask{geoindex: index}
 }
 
-func NewGeoLookupTaskWith(index library.GeoIndex, id string, coords gps.Coordinates) tasks.Task {
+func NewGeoLookupTaskWith(index library.GeoIndex, id library.PhotoID, coords gps.Coordinates) tasks.Task {
 	return geoLookupTask{
 		PhotoID:  id,
 		Coords:   coords,
@@ -84,16 +39,12 @@ func NewGeoLookupTaskWith(index library.GeoIndex, id string, coords gps.Coordina
 	}
 }
 
-func LookupPhotoOnAdd(executor tasks.TaskExecutor, index library.GeoIndex) library.NewPhotoCallback {
-	return func(ctx context.Context, p *library.Photo) {
+func LookupPhotoOnAdd(index library.GeoIndex) tasks.DeferredNewPhotoCallback {
+	return func(ctx context.Context, p *library.Photo) (tasks.Task, bool) {
 		if p.Location == nil {
-			return
+			return nil, false
 		}
-		task := NewGeoLookupTaskWith(index, p.ID, *p.Location)
-		if _, err := executor.Submit(ctx, task); err != nil {
-			log, _ := logging.FromWithNameAndFields(ctx, "geoLookupTask")
-			log.Warn("Defered lookup submission failed", zap.Error(err))
-		}
+		return NewGeoLookupTaskWith(index, p.ID, *p.Location), true
 	}
 }
 
@@ -102,7 +53,7 @@ func (t geoLookupTask) Describe() string {
 }
 
 func (t geoLookupTask) Execute(ctx context.Context, executor tasks.TaskExecutor, lib library.PhotoLibrary) error {
-	logger, ctx := logging.FromWithNameAndFields(ctx, "geoLookupTask", zap.String("photo", t.PhotoID))
+	logger, ctx := logging.FromWithNameAndFields(ctx, "geoLookupTask", zap.String("photo", string(t.PhotoID)))
 	logger.Info("Reverse geocoding", zap.Stringer("location", t.Coords))
 	address, err := resolver.ReverseGeocode(t.Coords.Lat, t.Coords.Long)
 	if err != nil {

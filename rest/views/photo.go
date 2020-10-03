@@ -23,7 +23,7 @@ func (l Links) AddAll(links Links) Links {
 }
 
 type Photo struct {
-	ID        string           `json:"id"`
+	ID        library.PhotoID  `json:"id"`
 	Links     Links            `json:"links"`
 	Name      string           `json:"name"`
 	DateTaken time.Time        `json:"dateTaken,omitempty"`
