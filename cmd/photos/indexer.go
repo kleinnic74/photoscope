@@ -151,7 +151,9 @@ func (t findUnindexedTask) Execute(ctx context.Context, executor tasks.TaskExecu
 			t.indexer.indexDeferred(ctx, p, i)
 			logger.Info("Indexing needed", zap.String("photo", string(p.ID)), zap.String("index", string(i)))
 		}
-		count++
+		if len(missing) > 0 {
+			count++
+		}
 	}
 	logger.Info("Index scan done", zap.Int("needIndexing", count))
 	return nil
