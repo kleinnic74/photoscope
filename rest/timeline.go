@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"bitbucket.org/kleinnic74/photos/library"
+	"bitbucket.org/kleinnic74/photos/rest/cursor"
 	"bitbucket.org/kleinnic74/photos/rest/views"
 	"github.com/gorilla/mux"
 )
@@ -22,7 +23,7 @@ func NewTimelineHandler(index library.DateIndex, lib library.PhotoLibrary) *Time
 }
 
 func (dates *TimelineHandler) InitRoutes(r *mux.Router) {
-	r.HandleFunc("/timeline/photos/{from}/{to}", dates.getTimelineForward).Methods("GET")
+	r.HandleFunc("/timeline/photos", dates.getTimelineForward).Methods("GET")
 	r.HandleFunc("/timeline/index", dates.getTimelineIndex).Methods("GET")
 }
 
@@ -30,10 +31,10 @@ type date string
 
 func (dates *TimelineHandler) getTimelineForward(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	vars := mux.Vars(r)
-	from := parseDateOrDefault(vars["from"], time.Time{})
-	to := parseDateOrDefault(vars["to"], time.Now())
-	ids, err := dates.index.FindRange(ctx, from, to)
+	c := cursor.DecodeFromRequest(r)
+	from := parseDateOrDefault(r.FormValue("from"), time.Time{})
+	to := parseDateOrDefault(r.FormValue("to"), time.Now())
+	ids, hasMore, err := dates.index.FindRangePaged(ctx, from, to, c.Start, c.PageSize)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, err)
 		return
@@ -44,7 +45,7 @@ func (dates *TimelineHandler) getTimelineForward(w http.ResponseWriter, r *http.
 			photoViews = append(photoViews, views.PhotoFrom(p))
 		}
 	}
-	respondWithJSON(w, http.StatusOK, photoViews)
+	respondWithJSON(w, http.StatusOK, cursor.PageFor(photoViews, c, hasMore))
 }
 
 func (dates *TimelineHandler) getTimelineIndex(w http.ResponseWriter, r *http.Request) {

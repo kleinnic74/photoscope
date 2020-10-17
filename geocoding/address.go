@@ -7,10 +7,14 @@ import (
 
 func toAddress(address geo.Address) (out gps.Address) {
 	return gps.Address{
-		Country:     address.Country,
-		CountryCode: address.CountryCode,
-		City:        address.City,
-		Zip:         address.Postcode,
-		County:      address.County,
+		Country: gps.Country{
+			Country: address.Country,
+			Code:    address.CountryCode,
+		},
+		Place: gps.Place{
+			City: address.City,
+			Zip:  address.Postcode,
+		},
+		County: address.County,
 	}
 }

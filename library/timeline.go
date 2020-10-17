@@ -1,6 +1,9 @@
 package library
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 type DateInfo struct {
 	Date  string `json:"key"`
@@ -55,4 +58,10 @@ func (m *Month) Add(t time.Time, key string) {
 	}
 	newDay := &DateInfo{Date: key}
 	m.Days = append(m.Days, newDay)
+}
+
+type DateIndex interface {
+	Keys(context.Context) (Timeline, error)
+	Add(context.Context, *Photo) error
+	FindRangePaged(context.Context, time.Time, time.Time, int, int) ([]PhotoID, bool, error)
 }

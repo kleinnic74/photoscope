@@ -27,7 +27,6 @@ export class ImageViewer extends Component {
     }
 
     handleKeyDown(ev) {
-        console.log("KeyDown:", "keyCode=", ev.keyCode, "key=", ev.key)
         switch (ev.keyCode) {
             case 39: //Arrow right
                 this.props.onNext()

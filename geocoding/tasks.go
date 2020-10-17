@@ -64,7 +64,7 @@ func (t geoLookupTask) Execute(ctx context.Context, executor tasks.TaskExecutor,
 	}
 	a := toAddress(*address)
 	logger.Info("Geo decoded: ",
-		zap.String("country", a.Country),
+		zap.String("country", a.Country.Code),
 		zap.String("city", a.City),
 		zap.String("county", a.County))
 	return t.geoindex.Update(ctx, t.PhotoID, &a)

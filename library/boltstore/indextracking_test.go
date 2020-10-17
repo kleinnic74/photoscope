@@ -18,7 +18,7 @@ func testAddToIndexTracker(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("Failed to init index tracker: %s", err)
 	}
-	tracker.RegisterIndex("geo")
+	tracker.RegisterIndex("geo", index.Version(1))
 	data := []struct {
 		ID                  library.PhotoID
 		err                 error
@@ -42,7 +42,7 @@ func testAddToIndexTracker(t *testing.T, db *bolt.DB) {
 			if found != d.found {
 				t.Fatalf("#%d: bad found indication, expected %t, got %t", i, d.found, found)
 			}
-			actualStatus := state.StatusFor("geo")
+			actualStatus := state.StatusFor("geo").Status
 			if actualStatus != d.expectedIndexStatus {
 				t.Errorf("#%d: bad status for index %s, expected %d, got %d", i, "geo", d.expectedIndexStatus, actualStatus)
 			}

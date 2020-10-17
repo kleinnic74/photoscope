@@ -1,0 +1,25 @@
+.Tree ul {
+    padding: 0;
+    margin: 0;
+    list-style-type: none;
+    width: 100%;
+}
+
+.Tree-node {
+    width: 100%;
+    text-align: right;
+}
+
+.Tree-node > li {
+    display: flex;
+    border-bottom-width: 1px;
+    border-bottom-color: black;
+    border-bottom-style: solid;
+    text-align: right;
+}
+
+
+.Tree-leaf li {
+    text-align: right;
+    width: 100%;
+}

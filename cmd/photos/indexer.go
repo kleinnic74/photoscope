@@ -55,13 +55,13 @@ func (indexer *Indexer) Add(ctx context.Context, photo *library.Photo) error {
 	return nil
 }
 
-func (indexer *Indexer) RegisterDefered(name index.Name, init tasks.DeferredNewPhotoCallback) {
-	indexer.tracker.RegisterIndex(name)
+func (indexer *Indexer) RegisterDefered(name index.Name, version index.Version, init tasks.DeferredNewPhotoCallback) {
+	indexer.tracker.RegisterIndex(name, version)
 	indexer.indexers[name] = init
 }
 
-func (indexer *Indexer) RegisterDirect(name index.Name, init library.NewPhotoCallback) {
-	indexer.tracker.RegisterIndex(name)
+func (indexer *Indexer) RegisterDirect(name index.Name, version index.Version, init library.NewPhotoCallback) {
+	indexer.tracker.RegisterIndex(name, version)
 	indexer.indexers[name] = init
 }
 

@@ -33,9 +33,7 @@ export default class Tasks extends Component {
 
     render() {
         return (
-            <div className="Content">
-                <TaskList tasks={this.state.tasks} />
-            </div>
+            <TaskList tasks={this.state.tasks} />
         )
     }
 }

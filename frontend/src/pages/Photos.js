@@ -8,11 +8,13 @@ import PropTypes from 'prop-types'
 
 export default class Photos extends Component {
     static propTypes = {
-        baseURL: PropTypes.string
+        baseURL: PropTypes.string,
+        filter: PropTypes.object
     }
 
     static defaultProps = {
-        baseURL: window.baseURL
+        baseURL: window.baseURL,
+        filter: {path: '/photos', params: {}}
     }
 
     constructor(props) {
@@ -36,6 +38,15 @@ export default class Photos extends Component {
         this.fetchImages()
     }
 
+    componentDidUpdate(prevProps) {
+        console.log("Photos changed")
+        if (this.props.filter !== prevProps.filter || this.props.params !== prevProps.params) {
+            console.log("Filter changed: ", prevProps.filter.path, "=>", this.props.filter.path)
+            console.log("Params changed: ", prevProps.filter.params, "=>", this.props.filter.params)
+            this.fetchImages()
+        }
+    }
+
     onNavClicked(cursor) {
         this.fetchImages(cursor)
     }
@@ -45,8 +56,8 @@ export default class Photos extends Component {
     }
 
     fetchImages(cursor, showImage, index) {
-        const params = cursor ? { c: cursor } : {}
-        axios.get(this.props.baseURL + '/photos', {
+        const params = cursor ? { c: cursor, ...this.props.filter.params } : {...this.props.filter.params}
+        axios.get(this.props.baseURL + this.props.filter.path, {
             params: params
         })
             .then(response => response.data)
@@ -112,7 +123,7 @@ export default class Photos extends Component {
 
     render() {
         return (
-            <div className="Content">
+            <div>
                 <Navbar links={this.state.links} onClick={this.onNavClicked} />
                 <ImageGrid baseURL={this.props.baseURL} images={this.state.images} onShow={this.showImage} />
                 <Navbar links={this.state.links} onClick={this.onNavClicked} />

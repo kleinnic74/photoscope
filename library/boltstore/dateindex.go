@@ -5,10 +5,13 @@ import (
 	"time"
 
 	"bitbucket.org/kleinnic74/photos/library"
+	"bitbucket.org/kleinnic74/photos/library/index"
 	"bitbucket.org/kleinnic74/photos/logging"
 	"github.com/boltdb/bolt"
 	"go.uber.org/zap"
 )
+
+const DateIndexVersion = index.Version(1)
 
 // DateIndex indexes photos by date
 type DateIndex struct {
@@ -52,9 +55,11 @@ func (d *DateIndex) Add(ctx context.Context, photo *library.Photo) error {
 }
 
 // FindRange returns all photos in the given date range
-func (d *DateIndex) FindRange(ctx context.Context, from, to time.Time) (ids []library.PhotoID, err error) {
+func (d *DateIndex) FindRangePaged(ctx context.Context, from, to time.Time, start, maxCount int) (ids []library.PhotoID, hasMore bool, err error) {
 	from, to = startOfDay(from), endOfDay(to)
 	err = d.db.View(func(tx *bolt.Tx) error {
+		var count int
+		var index int
 		b := tx.Bucket(datesBucket)
 		for t := from; t.Before(to); t = t.Add(time.Hour * 24) {
 			key := d.dayKey(t)
@@ -64,7 +69,17 @@ func (d *DateIndex) FindRange(ctx context.Context, from, to time.Time) (ids []li
 			}
 			c := dayBucket.Cursor()
 			for k, _ := c.First(); k != nil; k, _ = c.Next() {
+				if index < start {
+					index++
+					continue
+				}
+				if count == maxCount {
+					hasMore = true
+					return nil
+				}
 				ids = append(ids, library.PhotoID(k))
+				count++
+				index++
 			}
 		}
 		return nil

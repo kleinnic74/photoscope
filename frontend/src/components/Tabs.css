@@ -1,0 +1,17 @@
+.Tabs-list {
+    border-bottom: 1px solid black;
+    padding-left: 0;
+}
+
+.Tab-list-item {
+    display: inline-block;
+    list-style: none;
+    margin-bottom: -1px;
+    padding: 0.5rem 0.75rem;
+}
+
+.Tab-list-active {
+    background-color: white;
+    border: solid #ccc;
+    border-style: 1px 1px 0 1px;
+}

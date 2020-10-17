@@ -34,10 +34,10 @@ type LinkProvider struct {
 	patterns map[string]string
 }
 
-func (p LinkProvider) LinksFor(photo *library.Photo) Links {
+func (p LinkProvider) LinksFor(photo library.PhotoID) Links {
 	links := make(Links)
 	for name, pattern := range p.patterns {
-		links[name] = fmt.Sprintf(pattern, photo.ID)
+		links[name] = fmt.Sprintf(pattern, photo)
 	}
 	return links
 }
@@ -45,7 +45,7 @@ func (p LinkProvider) LinksFor(photo *library.Photo) Links {
 func PhotoFrom(p *library.Photo) Photo {
 	return Photo{
 		ID:        p.ID,
-		Links:     PhotoLinksFor(p),
+		Links:     PhotoLinksFor(p.ID),
 		Name:      p.Name(),
 		DateTaken: p.DateTaken,
 		Location:  p.Location,
@@ -60,6 +60,6 @@ var photoLinks = LinkProvider{
 	},
 }
 
-func PhotoLinksFor(p *library.Photo) Links {
+func PhotoLinksFor(p library.PhotoID) Links {
 	return photoLinks.LinksFor(p)
 }

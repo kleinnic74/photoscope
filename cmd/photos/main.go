@@ -103,8 +103,8 @@ func main() {
 	go executor.DrainTasks(executorContext)
 
 	indexer := NewIndexer(indexTracker, executor)
-	indexer.RegisterDirect("date", dateindex.Add)
-	indexer.RegisterDefered("geo", geocoding.LookupPhotoOnAdd(geoindex))
+	indexer.RegisterDirect("date", boltstore.DateIndexVersion, dateindex.Add)
+	indexer.RegisterDefered("geo", boltstore.GeoIndexVersion, geocoding.LookupPhotoOnAdd(geoindex))
 
 	indexer.RegisterTasks(taskRepo)
 
@@ -120,6 +120,9 @@ func main() {
 
 	timeline := rest.NewTimelineHandler(dateindex, lib)
 	timeline.InitRoutes(router)
+
+	geo := rest.NewGeoHandler(geoindex, lib)
+	geo.InitRoutes(router)
 
 	tasksApp := rest.NewTaskHandler(taskRepo, executor)
 	tasksApp.InitRoutes(router)

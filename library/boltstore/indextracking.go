@@ -14,7 +14,7 @@ var (
 
 type indexTracker struct {
 	db      *bolt.DB
-	indexes map[index.Name]struct{}
+	indexes map[index.Name]index.Version
 }
 
 // NewIndexTracker returns a new index tracker using the given BoltDB. The needed
@@ -26,11 +26,11 @@ func NewIndexTracker(db *bolt.DB) (index.Tracker, error) {
 	}); err != nil {
 		return nil, err
 	}
-	return &indexTracker{db: db, indexes: make(map[index.Name]struct{})}, nil
+	return &indexTracker{db: db, indexes: make(map[index.Name]index.Version)}, nil
 }
 
-func (tracker *indexTracker) RegisterIndex(index index.Name) {
-	tracker.indexes[index] = struct{}{}
+func (tracker *indexTracker) RegisterIndex(index index.Name, version index.Version) {
+	tracker.indexes[index] = version
 }
 
 func (tracker *indexTracker) Update(name index.Name, id library.PhotoID, err error) error {
@@ -40,6 +40,7 @@ func (tracker *indexTracker) Update(name index.Name, id library.PhotoID, err err
 	} else {
 		status = index.Indexed
 	}
+	version := tracker.indexes[name]
 	return tracker.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket(indexBucket)
 		state := index.NewState()
@@ -48,7 +49,7 @@ func (tracker *indexTracker) Update(name index.Name, id library.PhotoID, err err
 				return err
 			}
 		}
-		state.Set(name, status)
+		state.Set(name, status, version)
 		stateBytes, err := json.Marshal(state)
 		if err != nil {
 			return err
@@ -80,8 +81,10 @@ func (tracker *indexTracker) GetMissingIndexes(id library.PhotoID) (missing []in
 				return err
 			}
 		}
-		for k := range tracker.indexes {
-			if state.StatusFor(k) == index.NotIndexed {
+		for k, version := range tracker.indexes {
+			notIndexed := state.StatusFor(k).Status == index.NotIndexed
+			outdated := state.StatusFor(k).Version < version
+			if notIndexed || outdated {
 				missing = append(missing, k)
 			}
 		}
