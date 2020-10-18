@@ -9,17 +9,23 @@
 .Menu {
   grid-column: 1 / 2;
   grid-row: 1 / 2;
-  overflow-y: scroll;
+  overflow-y: hidden;
+  resize: horizontal;
+  height: 100%;
 }
 
 .Content {
   grid-column: 2 / 3;
   grid-row: 1 / 2;
-  overflow-y: scroll;
+  overflow-y: hidden;
+  align-items: center;
+  justify-items: center;
 }
 
 .Console {
   grid-column: 1 / 3;
   grid-row: 2 / 3;
-  overflow-y: scroll;
+  overflow-y: auto;
+  align-items: start;
+  border-top: 1px solid black;
 }

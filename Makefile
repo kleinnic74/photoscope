@@ -66,3 +66,7 @@ embed/embedded_resources.go: frontend/build
 frontend/build: $(wildcard frontend/src/**/*) $(wildcard frontend/public/**/*)
 	cd frontend && npm run build
 	pwd && touch frontend/build
+
+.PHONY: runui
+runui:
+	cd frontend && npm start

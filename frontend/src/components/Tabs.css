@@ -1,6 +1,16 @@
+.Tabs {
+    height: 100%;
+    max-height: 100%;
+    display: grid;
+    grid-template-rows: auto auto;
+}
+
 .Tabs-list {
     border-bottom: 1px solid black;
     padding-left: 0;
+    grid-row: 1 / 2;
+    align-items: end;
+    margin: 0;
 }
 
 .Tab-list-item {
@@ -14,4 +24,11 @@
     background-color: white;
     border: solid #ccc;
     border-style: 1px 1px 0 1px;
+}
+
+.Tab-content {
+    display: inline-block;
+    overflow-y: auto;
+    grid-row: 2 / 3;
+    height: 100%;
 }

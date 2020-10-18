@@ -1,5 +1,6 @@
 import React from 'react'
 import PropTypes from 'prop-types'
+import './Navbar.css'
 
 function Navbar(props) {
     var links = []
@@ -7,7 +8,7 @@ function Navbar(props) {
         links.push(<button key={l.href} onClick={(ev) => props.onClick(l.href)}>{name}</button>)
     }
     return (
-        <div className="navbav">
+        <div className="Navbar">
             {links}
         </div>
     )

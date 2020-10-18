@@ -12,14 +12,14 @@
 
 .Tree-node > li {
     display: flex;
-    border-bottom-width: 1px;
-    border-bottom-color: black;
-    border-bottom-style: solid;
     text-align: right;
+    border-bottom: 1px solid black;
 }
 
+.Tree-node > li:last-child {
+    border-bottom:none;
+}
 
 .Tree-leaf li {
     text-align: right;
-    width: 100%;
 }
