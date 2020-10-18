@@ -92,6 +92,7 @@ func main() {
 		logger.Fatal("Failed to initialize geoindex", zap.Error(err))
 	}
 	geocoding.RegisterTasks(taskRepo, geoindex)
+	RegisterDBUpgradeTasks(taskRepo, lib)
 
 	dateindex, err := boltstore.NewDateIndex(db)
 	if err != nil {

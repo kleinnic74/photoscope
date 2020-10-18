@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -103,7 +104,7 @@ func (lib *BasicPhotoLibrary) AddCallback(callback NewPhotoCallback) {
 func (lib *BasicPhotoLibrary) Add(ctx context.Context, photo domain.Photo, content io.Reader) error {
 	ctx = logging.Context(ctx, logging.From(ctx).Named("library").With(zap.String("source", photo.Name())))
 	targetDir, name, id := canonicalizeFilename(photo)
-	content, hash, err := loadContent(content)
+	content, hash, err := LoadContent(content)
 	if err != nil {
 		return err
 	}
@@ -122,6 +123,7 @@ func (lib *BasicPhotoLibrary) Add(ctx context.Context, photo domain.Photo, conte
 		Location:  photo.Location(),
 		Format:    photo.Format(),
 		Size:      size,
+		Hash:      hash,
 	}
 	logging.From(ctx).Info("Added", zap.String("photo", string(id)), zap.Any("location", p.Location))
 	if err := lib.db.Add(p); err != nil {
@@ -266,6 +268,46 @@ func (lib *BasicPhotoLibrary) OpenThumb(ctx context.Context, id PhotoID, size do
 	return f, lib.thumbFormat, nil
 }
 
+func (lib *BasicPhotoLibrary) UpgradeDBStructures(ctx context.Context) error {
+	logger, ctx := logging.SubFrom(ctx, "fixBadPaths")
+	photos, err := lib.FindAll(ctx)
+	if err != nil {
+		return err
+	}
+	var count int
+	for _, p := range photos {
+		var changed bool
+		if isPathConversionNeeded(p.Path) {
+			oldPath := p.Path
+			p.Path = convertPath(oldPath)
+			changed = true
+			logger.Info("Fixed photo path", zap.String("photo", string(p.ID)), zap.String("path", p.Path), zap.String("oldpath", oldPath))
+		}
+		if !p.HasHash() {
+			in, err := lib.openPhoto(p.Path)
+			if err != nil {
+				return err
+			}
+			defer in.Close()
+			h, err := ComputeHash(in)
+			if err != nil {
+				return err
+			}
+			p.Hash = h
+			changed = true
+		}
+		if changed {
+			lib.db.Update(p)
+			count++
+		}
+	}
+	if count > 0 {
+		logger.Info("Fixed photos in DB", zap.Int("count", count))
+	}
+	return nil
+
+}
+
 func canonicalizeFilename(photo domain.Photo) (dir, filename string, id PhotoID) {
 	dir = photo.DateTaken().Format("2006/01/02")
 	filename = fmt.Sprintf("%s.%s", photo.ID(), photo.Format().ID())
@@ -276,7 +318,7 @@ func canonicalizeFilename(photo domain.Photo) (dir, filename string, id PhotoID)
 	return
 }
 
-func loadContent(in io.Reader) (io.Reader, BinaryHash, error) {
+func LoadContent(in io.Reader) (io.Reader, BinaryHash, error) {
 	h := mmh3.New128()
 	in = io.TeeReader(in, h)
 	content := new(bytes.Buffer)
@@ -285,4 +327,14 @@ func loadContent(in io.Reader) (io.Reader, BinaryHash, error) {
 	}
 	hash := BinaryHash(base64.StdEncoding.EncodeToString(h.Sum(nil)))
 	return content, hash, nil
+}
+
+func ComputeHash(in io.Reader) (BinaryHash, error) {
+	// TODO: partly duplicates LoadContent, can it be improved?
+	h := mmh3.New128()
+	in = io.TeeReader(in, h)
+	if _, err := io.Copy(ioutil.Discard, in); err != nil {
+		return "", err
+	}
+	return BinaryHash(base64.StdEncoding.EncodeToString(h.Sum(nil))), nil
 }

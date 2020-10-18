@@ -35,10 +35,15 @@ func (h BinaryHash) Bytes() []byte {
 	return []byte(h)
 }
 
+func (h BinaryHash) String() string {
+	return string(h)
+}
+
 // Store represents a persistent storage of photo meta-data
 type Store interface {
 	Exists(hash BinaryHash) (PhotoID, bool)
 	Add(*Photo) error
+	Update(p *Photo) error
 	Get(id PhotoID) (*Photo, error)
 	FindAll() ([]*Photo, error)
 	FindAllPaged(start, maxCount int) ([]*Photo, bool, error)

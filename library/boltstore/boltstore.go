@@ -32,14 +32,16 @@ func NewBoltStore(db *bolt.DB) (lib library.ClosableStore, err error) {
 	lib = &BoltStore{
 		db: db,
 	}
-	if err = createBucket(db, photosBucket); err != nil {
-		return
-	}
-	if err = createBucket(db, idMapBucket); err != nil {
-		return
-	}
-	if err = createBucket(db, hashBucket); err != nil {
-		return
+	if !db.IsReadOnly() {
+		if err = createBucket(db, photosBucket); err != nil {
+			return
+		}
+		if err = createBucket(db, idMapBucket); err != nil {
+			return
+		}
+		if err = createBucket(db, hashBucket); err != nil {
+			return
+		}
 	}
 	return
 }
@@ -89,7 +91,33 @@ func (store *BoltStore) Add(p *library.Photo) error {
 		}
 		b = tx.Bucket(idMapBucket)
 		err = b.Put([]byte(p.ID), id)
+		if err != nil {
+			return err
+		}
+		b = tx.Bucket(hashBucket)
+		return b.Put([]byte(p.Hash), []byte(p.ID))
+	})
+}
+
+func (store *BoltStore) Update(p *library.Photo) error {
+	encoded, err := json.Marshal(p)
+	if err != nil {
 		return err
+	}
+	return store.db.Update(func(tx *bolt.Tx) error {
+		internalID := tx.Bucket(idMapBucket).Get([]byte(p.ID))
+		if internalID == nil {
+			return library.NotFound(p.ID)
+		}
+		b := tx.Bucket(photosBucket)
+		if err := b.Put(internalID, encoded); err != nil {
+			return err
+		}
+		if !p.HasHash() {
+			return nil
+		}
+		b = tx.Bucket(hashBucket)
+		return b.Put([]byte(p.Hash), []byte(p.ID))
 	})
 }
 

@@ -20,6 +20,7 @@ type importDirTask struct {
 var (
 	skipped = map[string]struct{}{
 		"@eadir": {},
+		"@eaDir": {},
 	}
 )
 
@@ -62,7 +63,7 @@ func (t importDirTask) Execute(ctx context.Context, tasks tasks.TaskExecutor, li
 			logger.Debug("Visiting file", zap.String("path", path),
 				zap.String("name", info.Name()))
 			if _, found := skipped[info.Name()]; found && info.IsDir() {
-				logger.Debug("SKipping dir", zap.String("dir", path))
+				logger.Debug("Skipping dir", zap.String("dir", path))
 				return filepath.SkipDir
 			}
 			if info.IsDir() {
@@ -77,7 +78,7 @@ func (t importDirTask) Execute(ctx context.Context, tasks tasks.TaskExecutor, li
 }
 
 func (t importDirTask) importImage(ctx context.Context, path string, tasks tasks.TaskExecutor) error {
-	task := NewImportFileTaskWithParams(false, path, false)
+	task := NewImportFileTaskWithParams(t.DryRun, path, false)
 	_, err := tasks.Submit(ctx, task)
 	return err
 }

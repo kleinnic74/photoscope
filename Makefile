@@ -1,10 +1,12 @@
 TMPDIR=tmp
 BINDIR=bin
+BINDIR_WIN=$(BINDIR)/win
+BINDIR_ARM=$(BINDIR)/arm
 
-BINARY_WIN=$(BINDIR)/win/photos.exe
-BINARY_ARM=$(BINDIR)/arm/photos
+BINARY_WIN=$(BINDIR_WIN)/photos.exe
+BINARY_ARM=$(BINDIR_ARM)/photos
 
-TOOLS=./cmd/dbinspect
+TOOLS=./cmd/dbinspect ./cmd/dircheck ./cmd/exifprint
 
 PKG=./cmd/photos
 
@@ -13,9 +15,10 @@ BINARIES=$(BINARY_WIN) $(BINARY_ARM) $(TOOLS)
 FRONTEND=frontend/
 
 GO_VARS=
+GO_ARM=CGO_ENABLED=0 GOARM=7 GOARCH=arm GOOS=linux
 
 .PHONY: all
-all: build
+all: build frontend/build
 
 $(BINDIR):
 	mkdir $(BINDIR)
@@ -29,11 +32,16 @@ $(BINARY_WIN): $(BINDIR) generate
 
 .PHONY: $(BINARY_ARM) 
 $(BINARY_ARM): $(BINDIR) generate
-	CGO_ENABLED=0 GOARM=7 GOARCH=arm GOOS=linux go build $(GO_VARS) -o $(BINARY_ARM) $(PKG)
+	$(GO_ARM) go build $(GO_VARS) -o $(BINARY_ARM) $(PKG)
 
 .PHONY: tools
 tools:
-	go build -o $(BINDIR) $(TOOLS)
+	go build -o $(BINDIR_WIN) $(TOOLS)
+	$(GO_ARM) go build -o $(BINDIR_ARM) $(TOOLS)
+
+.PHONY: tools_arm
+tools_arm:
+	$(GO_ARM) go build -o $(BINDIR_ARM) $(TOOLS)
 
 .PHONY: build
 build: $(BINARIES)
@@ -65,7 +73,7 @@ embed/embedded_resources.go: frontend/build
 
 frontend/build: $(wildcard frontend/src/**/*) $(wildcard frontend/public/**/*)
 	cd frontend && npm run build
-	pwd && touch frontend/build
+	touch frontend/build
 
 .PHONY: runui
 runui:

@@ -23,5 +23,5 @@ func imageResizer(format Format, in io.Reader, size ThumbSize) (image.Image, err
 	if err != nil {
 		return nil, err
 	}
-	return resize.Resize(size.width, 0, image, resize.NearestNeighbor), nil
+	return resize.Resize(size.width, 0, image, resize.Bilinear), nil
 }

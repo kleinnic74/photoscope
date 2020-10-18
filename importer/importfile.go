@@ -49,8 +49,6 @@ func (t importFileTask) Execute(ctx context.Context, tasks tasks.TaskExecutor, l
 		return err
 	}
 
-	// TODO: Create thumb
-
 	if t.Delete {
 		err = os.Remove(t.Path)
 		if err != nil {

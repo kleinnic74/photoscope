@@ -19,11 +19,15 @@ type Photo struct {
 	Format    domain.Format    `json:"format"`
 	DateTaken time.Time        `json:"dateUN,omitempty" storm:"index"`
 	Location  *gps.Coordinates `json:"gps,omitempty"`
-	Hash      string           `json:"hash,omitempty"`
+	Hash      BinaryHash       `json:"hash,omitempty"`
 }
 
 func (p *Photo) Name() string {
 	return filepath.Base(p.Path)
+}
+
+func (p *Photo) HasHash() bool {
+	return len(p.Hash) > 0
 }
 
 func (p *Photo) MarshalJSON() ([]byte, error) {

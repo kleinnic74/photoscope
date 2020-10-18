@@ -85,6 +85,13 @@ func (indexer *Indexer) indexDeferred(ctx context.Context, photo *library.Photo,
 	return
 }
 
+func (indexer *Indexer) GetIndexes() (indexers []index.Name) {
+	for k := range indexer.indexers {
+		indexers = append(indexers, k)
+	}
+	return
+}
+
 type deferredCallback struct {
 	tracker index.Tracker
 	name    index.Name
