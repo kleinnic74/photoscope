@@ -18,6 +18,7 @@ import (
 	"go.uber.org/zap"
 
 	"bitbucket.org/kleinnic74/photos/consts"
+	"bitbucket.org/kleinnic74/photos/domain"
 	"bitbucket.org/kleinnic74/photos/geocoding"
 	"bitbucket.org/kleinnic74/photos/importer"
 	"bitbucket.org/kleinnic74/photos/library"
@@ -82,7 +83,7 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to initialize library", zap.Error(err))
 	}
-	lib, err := library.NewBasicPhotoLibrary(libDir, store)
+	lib, err := library.NewBasicPhotoLibrary(libDir, store, domain.LocalThumber{})
 	if err != nil {
 		logger.Fatal("Failed to initialize library", zap.Error(err))
 	}

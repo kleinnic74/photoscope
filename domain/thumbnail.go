@@ -18,10 +18,16 @@ type ThumbSize struct {
 	Name  string
 }
 
-func imageResizer(format Format, in io.Reader, size ThumbSize) (image.Image, error) {
-	image, err := format.Decode(in)
+type Thumber interface {
+	CreateThumb(Format, io.Reader, ThumbSize) (image.Image, error)
+}
+
+type LocalThumber struct{}
+
+func (t LocalThumber) CreateThumb(format Format, in io.Reader, size ThumbSize) (image.Image, error) {
+	img, err := format.Thumbbase(in)
 	if err != nil {
 		return nil, err
 	}
-	return resize.Resize(size.width, 0, image, resize.Bilinear), nil
+	return resize.Thumbnail(size.width, size.width, img, resize.Bilinear), nil
 }

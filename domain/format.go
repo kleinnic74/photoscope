@@ -26,7 +26,7 @@ const (
 type metaDataReader func(io.Reader, *MediaMetaData) error
 type photoDecoder func(io.Reader) (image.Image, error)
 type photoEncoder func(image.Image, io.Writer) error
-type thumbCreator func(Format, io.Reader, ThumbSize) (image.Image, error)
+type thumbFunc func(io.Reader) (image.Image, error)
 
 type Format interface {
 	Type() MediaType
@@ -35,7 +35,7 @@ type Format interface {
 	DecodeMetaData(in io.Reader, meta *MediaMetaData) error
 	Decode(in io.Reader) (image.Image, error)
 	Encode(img image.Image, out io.Writer) error
-	Thumb(in io.ReadCloser, size ThumbSize) (image.Image, error)
+	Thumbbase(in io.Reader) (image.Image, error)
 }
 
 type formatImpl struct {
@@ -45,7 +45,7 @@ type formatImpl struct {
 	metaReader metaDataReader
 	decoder    photoDecoder
 	encoder    photoEncoder
-	thumber    thumbCreator
+	thumber    thumbFunc
 }
 
 type ErrThumbsNotSupported string
@@ -66,17 +66,22 @@ var noopFormat = formatImpl{
 	metaReader: func(io.Reader, *MediaMetaData) error { return nil },
 }
 
+var (
+	JPEG Format
+	MOV  Format
+)
+
 func init() {
-	RegisterFormat(Picture, "jpg", "image/jpeg", exifReader, jpeg.Decode, jpegEncode, imageResizer)
-	RegisterFormat(Video, "mov", "video/quicktime", quicktimeReader, nil, nil, nil)
+	JPEG = RegisterFormat(Picture, "jpg", "image/jpeg", exifReader, jpeg.Decode, jpegEncode, jpeg.Decode)
+	MOV = RegisterFormat(Video, "mov", "video/quicktime", quicktimeReader, nil, nil, nil)
 }
 
 func RegisterFormat(typeID MediaType, extension string, mime string,
 	metaReader metaDataReader,
 	decoder photoDecoder,
 	encoder photoEncoder,
-	thumber thumbCreator) {
-	formatsById[extension] = formatImpl{
+	thumber thumbFunc) (format Format) {
+	format = formatImpl{
 		typeID:     typeID,
 		id:         extension,
 		mime:       mime,
@@ -85,6 +90,8 @@ func RegisterFormat(typeID MediaType, extension string, mime string,
 		encoder:    encoder,
 		thumber:    thumber,
 	}
+	formatsById[extension] = format
+	return
 }
 
 func FormatForExt(ext string) (Format, bool) {
@@ -131,12 +138,11 @@ func (f formatImpl) Mime() string {
 	return f.mime
 }
 
-func (f formatImpl) Thumb(in io.ReadCloser, size ThumbSize) (image.Image, error) {
-	defer in.Close()
+func (f formatImpl) Thumbbase(in io.Reader) (image.Image, error) {
 	if f.thumber == nil {
 		return nil, ErrThumbsNotSupported(f.id)
 	}
-	return f.thumber(f, in, size)
+	return f.thumber(in)
 }
 
 // DecodeMetaData will decode meta-data as per this format from the given

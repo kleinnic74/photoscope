@@ -32,6 +32,7 @@ type BasicPhotoLibrary struct {
 	db       ClosableStore
 
 	thumbdir    string
+	thumber     domain.Thumber
 	thumbFormat domain.Format
 
 	callbacks []NewPhotoCallback
@@ -68,7 +69,7 @@ func PhotoFileAlreadyExists(path string) error {
 }
 
 // NewBasicPhotoLibrary creates a new photo library at the given directory using the given meta-data store provider function
-func NewBasicPhotoLibrary(basedir string, store ClosableStore) (*BasicPhotoLibrary, error) {
+func NewBasicPhotoLibrary(basedir string, store ClosableStore, thumber domain.Thumber) (*BasicPhotoLibrary, error) {
 	absdir, err := filepath.Abs(basedir)
 	if err != nil {
 		return nil, err
@@ -92,6 +93,7 @@ func NewBasicPhotoLibrary(basedir string, store ClosableStore) (*BasicPhotoLibra
 
 		thumbdir:    thumbsDir,
 		thumbFormat: domain.MustFormatForExt("jpg"),
+		thumber:     thumber,
 	}, nil
 }
 
@@ -246,7 +248,8 @@ func (lib *BasicPhotoLibrary) OpenThumb(ctx context.Context, id PhotoID, size do
 			logger.Error("Failed to open image content", zap.Error(err))
 			return nil, nil, err
 		}
-		thumb, err := photo.Format.Thumb(baseImage, domain.Small)
+		defer baseImage.Close()
+		thumb, err := lib.thumber.CreateThumb(photo.Format, baseImage, domain.Small)
 		if err != nil {
 			logger.Error("Failed to created thumb", zap.Error(err))
 			return nil, nil, err
