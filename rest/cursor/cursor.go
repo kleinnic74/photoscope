@@ -7,6 +7,8 @@ import (
 	"strconv"
 
 	"bitbucket.org/kleinnic74/photos/consts"
+	"bitbucket.org/kleinnic74/photos/logging"
+	"go.uber.org/zap"
 )
 
 type Cursor struct {
@@ -15,22 +17,27 @@ type Cursor struct {
 	Order    consts.SortOrder `json:"order,omitempty"`
 }
 
-var defaultPageSize int = 20
+var (
+	defaultPageSize int = 20
+	encoding            = base64.StdEncoding.WithPadding(base64.NoPadding)
+)
 
 func DecodeFromRequest(r *http.Request) Cursor {
 	cursor := Cursor{PageSize: defaultPageSize}
-	encodedCursor := r.Form.Get("c")
+	encodedCursor := r.URL.Query().Get("c")
 	if err := DecodeFromString(encodedCursor, &cursor); err != nil {
-		// log a warning
+		logging.From(r.Context()).Warn("Invalid cursor", zap.String("cursor", encodedCursor), zap.Error(err))
+	} else {
+		logging.From(r.Context()).Info("Received cursor", zap.String("cursor", encodedCursor), zap.Int("start", cursor.Start), zap.Int("page", cursor.PageSize))
 	}
-	switch pageSizeStr := r.Form.Get("p"); pageSizeStr {
+	switch pageSizeStr := r.URL.Query().Get("p"); pageSizeStr {
 	case "":
 	default:
 		if pageSize64, err := strconv.ParseUint(pageSizeStr, 10, 0); err == nil {
 			cursor.PageSize = int(pageSize64)
 		}
 	}
-	switch order := r.Form.Get("o"); order {
+	switch order := r.URL.Query().Get("o"); order {
 	case "a", "+", "asc":
 		cursor.Order = consts.Ascending
 	case "d", "-", "desc":
@@ -44,7 +51,7 @@ func DecodeFromString(encoded string, cursor *Cursor) error {
 	if encoded == "" {
 		return nil
 	}
-	asJSON, err := base64.StdEncoding.DecodeString(encoded)
+	asJSON, err := encoding.DecodeString(encoded)
 	if err != nil {
 		return err
 	}
@@ -56,7 +63,7 @@ func (c Cursor) Encode() string {
 	if err != nil {
 		return ""
 	}
-	return base64.StdEncoding.EncodeToString([]byte(asJSON))
+	return encoding.EncodeToString([]byte(asJSON))
 }
 
 func (c Cursor) Previous() (Cursor, bool) {

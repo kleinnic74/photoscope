@@ -1,0 +1,18 @@
+#PhotoPage {
+    display: grid;
+    grid-template-rows: 3em auto 3em;
+    grid-template-areas: "navtop" "imagegrid" "navbottom";
+    height: 100%;
+}
+
+#Navtop {
+    grid-area: "navtop";
+}
+
+#Navbottom {
+    grid-area: "navbottom";
+}
+
+#Imagegrid {
+    grid-area: "imagegrid";
+}

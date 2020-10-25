@@ -18,13 +18,13 @@ export default class App extends Component {
   }
 
   filterChanged(url, params) {
-    console.log("Day selected:", url, params)
+    console.log("Filter selected:", url, params)
     this.setState({filter: {path: url, params: params}})
   }
 
   render() {
-    const baseURL = document.baseURI
-    //const baseURL = "http://localhost:8080" 
+    //const baseURL = document.baseURI
+    const baseURL = "http://localhost:8080" 
     console.log("Base URL", baseURL, "filter", this.state.filter)
     return (
       <div className="App">
@@ -32,7 +32,7 @@ export default class App extends Component {
           <FilterSelector baseURL={baseURL} onFilterChanged={this.filterChanged} />
         </div>
         <div className="Content">
-          <Photos baseURL={baseURL} filter={this.state.filter}/>
+          <Photos baseURL={baseURL} filter={this.state.filter} />
         </div>
         <div className="Console">
           <Tasks baseURL={baseURL} />

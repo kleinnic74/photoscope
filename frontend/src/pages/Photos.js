@@ -6,6 +6,8 @@ import ImageViewer from '../components/ImageViewer'
 import axios from 'axios'
 import PropTypes from 'prop-types'
 
+import './Photos.css'
+
 export default class Photos extends Component {
     static propTypes = {
         baseURL: PropTypes.string,
@@ -14,7 +16,7 @@ export default class Photos extends Component {
 
     static defaultProps = {
         baseURL: window.baseURL,
-        filter: {path: '/photos', params: {}}
+        filter: { path: '/photos', params: {} }
     }
 
     constructor(props) {
@@ -35,14 +37,21 @@ export default class Photos extends Component {
     }
 
     componentDidMount() {
+        const size = {
+            width: this.toplevel.parentElement.clientWidth,
+            height: this.toplevel.parentElement.clientHeight
+        }
+        const maxImages = { x: Math.floor((size.width - 20) / (128 + 10)), y: Math.floor((size.height - 20) / (128 + 10)) }
+        console.log("Photo page size:", size, "Max images:", maxImages)
+        this.setState({ maxImages: maxImages.x * maxImages.y })
         this.fetchImages()
     }
 
-    componentDidUpdate(prevProps) {
-        console.log("Photos changed")
-        if (this.props.filter !== prevProps.filter || this.props.params !== prevProps.params) {
-            console.log("Filter changed: ", prevProps.filter.path, "=>", this.props.filter.path)
-            console.log("Params changed: ", prevProps.filter.params, "=>", this.props.filter.params)
+    componentDidUpdate(prevProps, prevState) {
+        if (this.props.filter !== prevProps.filter ||
+            this.props.params !== prevProps.params ||
+            this.state.maxImages !== prevState.maxImages) {
+            console.log("Grid filter changed: ", prevProps.filter.path, "=>", this.props.filter.path)
             this.fetchImages()
         }
     }
@@ -56,16 +65,23 @@ export default class Photos extends Component {
     }
 
     fetchImages(cursor, showImage, index) {
-        const params = cursor ? { c: cursor, ...this.props.filter.params } : {...this.props.filter.params}
+        let params = { ...this.props.filter.params }
+        if (cursor) {
+            params = { c: cursor, ...params}
+        }
+        if (this.state.maxImages) {
+            params = { p: this.state.maxImages, ...params }
+        }
+        console.log("Fetching images, params:", params)
         axios.get(this.props.baseURL + this.props.filter.path, {
             params: params
         })
             .then(response => response.data)
             .then(data => {
-                const i = index < 0 ? data.data.length-1 : index || 0
+                const i = index < 0 ? data.data.length - 1 : index || 0
                 this.setState({
                     images: data.data,
-                    links: data.links?.reduce((map,l) => {
+                    links: data.links?.reduce((map, l) => {
                         map[l.name] = l
                         return map
                     }, {}),
@@ -85,7 +101,7 @@ export default class Photos extends Component {
         this.setState((prevState) => {
             var next = prevState.index + 1
             if (next >= prevState.images.length) {
-                this.fetchImages(prevState.links.next.href,true,0)
+                this.fetchImages(prevState.links.next.href, true, 0)
                 return {}
             }
             var img = this.absURL(prevState.images[next].links.view)
@@ -99,12 +115,12 @@ export default class Photos extends Component {
 
     showPrevious() {
         this.setState((prevState) => {
-            var prev = prevState.index-1
+            var prev = prevState.index - 1
             if (prev < 0) {
                 if (prevState.links.previous) {
                     this.fetchImages(prevState.links.previous.href, true, -1)
                 }
-                return {} 
+                return {}
             }
             var img = this.absURL(prevState.images[prev].links.view)
             return {
@@ -123,15 +139,15 @@ export default class Photos extends Component {
 
     render() {
         return (
-            <div>
-                <Navbar links={this.state.links} onClick={this.onNavClicked} />
-                <ImageGrid baseURL={this.props.baseURL} images={this.state.images} onShow={this.showImage} />
-                <Navbar links={this.state.links} onClick={this.onNavClicked} />
-                <ImageViewer src={this.state.image} 
-                    visible={this.state.showImage} 
-                    onClick={this.toggleImage} 
-                    onNext={this.showNext} 
-                    onPrev={this.showPrevious}/>
+            <div id="PhotoPage" ref={(element) => { this.toplevel = element }}>
+                <Navbar id="Navtop" links={this.state.links} onClick={this.onNavClicked} />
+                <ImageGrid id="Imagegrid" baseURL={this.props.baseURL} images={this.state.images} onShow={this.showImage} />
+                <Navbar id="Navbottom" links={this.state.links} onClick={this.onNavClicked} />
+                <ImageViewer src={this.state.image}
+                    visible={this.state.showImage}
+                    onClick={this.toggleImage}
+                    onNext={this.showNext}
+                    onPrev={this.showPrevious} />
             </div>
         )
     }
