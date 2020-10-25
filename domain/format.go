@@ -1,11 +1,14 @@
 package domain
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
 	"image/jpeg"
 	"io"
+	"log"
+	"strings"
 
 	"github.com/h2non/filetype"
 	"github.com/rwcarlsen/goexif/exif"
@@ -61,17 +64,62 @@ var (
 	ErrNoEncoderAvailable = errors.New("No encoder available for this format")
 )
 
-var noopFormat = formatImpl{
-	typeID:     Picture,
-	metaReader: func(io.Reader, *MediaMetaData) error { return nil },
+type FormatSpec string
+
+func (stub FormatSpec) Type() MediaType {
+	return formatsById[string(stub)].Type()
+}
+
+func (stub FormatSpec) ID() string {
+	return string(stub)
+}
+
+func (stub FormatSpec) Mime() string {
+	return formatsById[string(stub)].Mime()
+}
+
+func (stub FormatSpec) DecodeMetaData(in io.Reader, meta *MediaMetaData) error {
+	return formatsById[string(stub)].DecodeMetaData(in, meta)
+}
+
+func (stub FormatSpec) Decode(in io.Reader) (image.Image, error) {
+	return formatsById[string(stub)].Decode(in)
+}
+
+func (stub FormatSpec) Encode(img image.Image, out io.Writer) error {
+	return formatsById[string(stub)].Encode(img, out)
+}
+
+func (stub FormatSpec) Thumbbase(in io.Reader) (image.Image, error) {
+	return formatsById[string(stub)].Thumbbase(in)
+}
+
+func (stub *FormatSpec) UnmarshalJSON(data []byte) error {
+	var ext string
+	if err := json.Unmarshal(data, &ext); err != nil {
+		return err
+	}
+	ext = strings.ToLower(ext)
+	if _, found := formatsById[ext]; found {
+		*stub = FormatSpec(ext)
+		return nil
+	}
+	log.Printf("unmarshalJSON unknown FormatSpec: %s", ext)
+	*stub = FormatSpec("")
+	return nil
 }
 
 var (
-	JPEG Format
-	MOV  Format
+	JPEG          Format
+	MOV           Format
+	UnknownFormat Format = formatImpl{
+		typeID:     Picture,
+		metaReader: func(io.Reader, *MediaMetaData) error { return nil },
+	}
 )
 
 func init() {
+	formatsById[""] = UnknownFormat
 	JPEG = RegisterFormat(Picture, "jpg", "image/jpeg", exifReader, jpeg.Decode, jpegEncode, jpeg.Decode)
 	MOV = RegisterFormat(Video, "mov", "video/quicktime", quicktimeReader, nil, nil, nil)
 }
@@ -99,30 +147,29 @@ func FormatForExt(ext string) (Format, bool) {
 	return f, found
 }
 
-func MustFormatForExt(ext string) Format {
+func MustFormatForExt(ext string) FormatSpec {
 	if ext == "" {
-		return noopFormat
+		return FormatSpec("")
 	}
-	f, found := formatsById[ext]
-	if !found {
-		panic(fmt.Errorf("Unkown format with extension '%s'", ext))
+	if _, found := formatsById[ext]; found {
+		return FormatSpec(ext)
 	}
-	return f
+	panic(fmt.Errorf("Unknown format with extension '%s'", ext))
 }
 
 // FormatOf returns the format of the image in the given reader. Calling
 // this function will consume the reader
-func FormatOf(r io.Reader) (Format, error) {
+func FormatOf(r io.Reader) (FormatSpec, error) {
 	header := make([]byte, 500)
 	r.Read(header)
 	kind, err := filetype.Match(header)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	if f, found := formatsById[kind.Extension]; found {
-		return f, nil
+	if _, found := formatsById[kind.Extension]; found {
+		return FormatSpec(kind.Extension), nil
 	} else {
-		return nil, fmt.Errorf("Unsupported file format")
+		return "", fmt.Errorf("Unsupported file format")
 	}
 }
 
@@ -180,6 +227,11 @@ func exifReader(in io.Reader, meta *MediaMetaData) error {
 	}
 	if lat, long, err := ex.LatLong(); err == nil {
 		meta.Location = gps.NewCoordinates(lat, long)
+	}
+	if tag, err := ex.Get(exif.Orientation); err == nil && tag.Count > 0 {
+		if orientation, err := tag.Int(0); err == nil {
+			meta.Orientation = Orientation(orientation)
+		}
 	}
 	return nil
 }

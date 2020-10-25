@@ -47,7 +47,7 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) getPhotos(w http.ResponseWriter, r *http.Request) {
 	c := cursor.DecodeFromRequest(r)
-	photos, hasMore, err := a.lib.FindAllPaged(r.Context(), c.Start, c.PageSize)
+	photos, hasMore, err := a.lib.FindAllPaged(r.Context(), c.Start, c.PageSize, c.Order)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, err)
 		return

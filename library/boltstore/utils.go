@@ -1,6 +1,7 @@
 package boltstore
 
 import (
+	"bitbucket.org/kleinnic74/photos/consts"
 	"github.com/boltdb/bolt"
 )
 
@@ -29,6 +30,15 @@ type forwardCursor struct {
 type reverseCursor struct {
 	hasMore bool
 	baseCursor
+}
+
+func newCursor(delegate *bolt.Cursor, order consts.SortOrder) Cursor {
+	switch order {
+	case consts.Descending:
+		return newReverseCursor(delegate)
+	default:
+		return newForwardCursor(delegate)
+	}
 }
 
 func newForwardCursor(delegate *bolt.Cursor) Cursor {

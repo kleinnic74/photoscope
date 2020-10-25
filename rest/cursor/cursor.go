@@ -5,49 +5,50 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+
+	"bitbucket.org/kleinnic74/photos/consts"
 )
 
 type Cursor struct {
 	Start    int
 	PageSize int
+	Order    consts.SortOrder `json:"order,omitempty"`
 }
 
 var defaultPageSize int = 20
 
 func DecodeFromRequest(r *http.Request) Cursor {
 	cursor := Cursor{PageSize: defaultPageSize}
-	pageSizeStr := r.URL.Query().Get("p")
-	var pageSize int
-	if pageSizeStr != "" {
+	encodedCursor := r.Form.Get("c")
+	if err := DecodeFromString(encodedCursor, &cursor); err != nil {
+		// log a warning
+	}
+	switch pageSizeStr := r.Form.Get("p"); pageSizeStr {
+	case "":
+	default:
 		if pageSize64, err := strconv.ParseUint(pageSizeStr, 10, 0); err == nil {
-			pageSize = int(pageSize64)
-			cursor.PageSize = pageSize
+			cursor.PageSize = int(pageSize64)
 		}
 	}
-	encodedCursor := r.URL.Query().Get("c")
-	cursor = DecodeFromString(encodedCursor, defaultPageSize)
-	if pageSize != 0 {
-		cursor.PageSize = pageSize
+	switch order := r.Form.Get("o"); order {
+	case "a", "+", "asc":
+		cursor.Order = consts.Ascending
+	case "d", "-", "desc":
+		cursor.Order = consts.Descending
+	default:
 	}
 	return cursor
 }
 
-func DecodeFromString(encoded string, defaultPageSize int) Cursor {
-	cursor := Cursor{PageSize: defaultPageSize}
+func DecodeFromString(encoded string, cursor *Cursor) error {
 	if encoded == "" {
-		return cursor
+		return nil
 	}
 	asJSON, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
-		return cursor
+		return err
 	}
-	if err := json.Unmarshal(asJSON, &cursor); err != nil {
-		return cursor
-	}
-	if cursor.PageSize == 0 {
-		cursor.PageSize = defaultPageSize
-	}
-	return cursor
+	return json.Unmarshal(asJSON, cursor)
 }
 
 func (c Cursor) Encode() string {
@@ -60,11 +61,11 @@ func (c Cursor) Encode() string {
 
 func (c Cursor) Previous() (Cursor, bool) {
 	if c.Start > 0 {
-		return Cursor{Start: c.Start - c.PageSize, PageSize: c.PageSize}, true
+		return Cursor{Start: c.Start - c.PageSize, PageSize: c.PageSize, Order: c.Order}, true
 	}
 	return Cursor{}, false
 }
 
 func (c Cursor) Next() (Cursor, bool) {
-	return Cursor{Start: c.Start + c.PageSize, PageSize: c.PageSize}, true
+	return Cursor{Start: c.Start + c.PageSize, PageSize: c.PageSize, Order: c.Order}, true
 }

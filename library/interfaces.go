@@ -5,6 +5,7 @@ import (
 	"io"
 	"time"
 
+	"bitbucket.org/kleinnic74/photos/consts"
 	"bitbucket.org/kleinnic74/photos/domain"
 )
 
@@ -15,9 +16,9 @@ type PhotoID string
 type PhotoLibrary interface {
 	Add(ctx context.Context, photo domain.Photo, content io.Reader) error
 	Get(ctx context.Context, id PhotoID) (*Photo, error)
-	FindAll(ctx context.Context) ([]*Photo, error)
-	FindAllPaged(ctx context.Context, start, maxCount int) ([]*Photo, bool, error)
-	Find(ctx context.Context, start, end time.Time) ([]*Photo, error)
+	FindAll(ctx context.Context, order consts.SortOrder) ([]*Photo, error)
+	FindAllPaged(ctx context.Context, start, maxCount int, order consts.SortOrder) ([]*Photo, bool, error)
+	Find(ctx context.Context, start, end time.Time, order consts.SortOrder) ([]*Photo, error)
 
 	OpenContent(ctx context.Context, id PhotoID) (io.ReadCloser, *Photo, error)
 	OpenThumb(ctx context.Context, id PhotoID, size domain.ThumbSize) (io.ReadCloser, domain.Format, error)
@@ -45,9 +46,9 @@ type Store interface {
 	Add(*Photo) error
 	Update(p *Photo) error
 	Get(id PhotoID) (*Photo, error)
-	FindAll() ([]*Photo, error)
-	FindAllPaged(start, maxCount int) ([]*Photo, bool, error)
-	Find(start, end time.Time) ([]*Photo, error)
+	FindAll(order consts.SortOrder) ([]*Photo, error)
+	FindAllPaged(start, maxCount int, order consts.SortOrder) ([]*Photo, bool, error)
+	Find(start, end time.Time, order consts.SortOrder) ([]*Photo, error)
 }
 
 // ClosableStore is a Store that can be closed

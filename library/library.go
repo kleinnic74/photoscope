@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"bitbucket.org/kleinnic74/photos/consts"
 	"bitbucket.org/kleinnic74/photos/domain"
 	"bitbucket.org/kleinnic74/photos/logging"
 	"github.com/reusee/mmh3"
@@ -119,13 +120,14 @@ func (lib *BasicPhotoLibrary) Add(ctx context.Context, photo domain.Photo, conte
 	}
 	path := filepath.Join(targetDir, name)
 	p := &Photo{
-		Path:      path,
-		ID:        id,
-		DateTaken: photo.DateTaken().UTC(),
-		Location:  photo.Location(),
-		Format:    photo.Format(),
-		Size:      size,
-		Hash:      hash,
+		Path:        path,
+		ID:          id,
+		DateTaken:   photo.DateTaken().UTC(),
+		Location:    photo.Location(),
+		Format:      photo.Format(),
+		Orientation: photo.Orientation(),
+		Size:        size,
+		Hash:        hash,
 	}
 	logging.From(ctx).Info("Added", zap.String("photo", string(id)), zap.Any("location", p.Location))
 	if err := lib.db.Add(p); err != nil {
@@ -143,20 +145,20 @@ func (lib *BasicPhotoLibrary) Get(ctx context.Context, id PhotoID) (*Photo, erro
 }
 
 // FindAll returns all photos from the underlying store
-func (lib *BasicPhotoLibrary) FindAll(ctx context.Context) ([]*Photo, error) {
-	return lib.db.FindAll()
+func (lib *BasicPhotoLibrary) FindAll(ctx context.Context, order consts.SortOrder) ([]*Photo, error) {
+	return lib.db.FindAll(order)
 }
 
 // FindAllPaged returns maximum maxCount photos from the underlying store starting
 // at start index
-func (lib *BasicPhotoLibrary) FindAllPaged(ctx context.Context, start, maxCount int) ([]*Photo, bool, error) {
-	return lib.db.FindAllPaged(start, maxCount)
+func (lib *BasicPhotoLibrary) FindAllPaged(ctx context.Context, start, maxCount int, order consts.SortOrder) ([]*Photo, bool, error) {
+	return lib.db.FindAllPaged(start, maxCount, order)
 }
 
 // Find returns all photos stored in this library that have been taken between
 // the given start and end times
-func (lib *BasicPhotoLibrary) Find(ctx context.Context, start, end time.Time) ([]*Photo, error) {
-	return lib.db.Find(start, end)
+func (lib *BasicPhotoLibrary) Find(ctx context.Context, start, end time.Time, order consts.SortOrder) ([]*Photo, error) {
+	return lib.db.Find(start, end, order)
 }
 
 // OpenContent returns an io.ReadCloser on the content of the photo with the given ID.
@@ -249,7 +251,7 @@ func (lib *BasicPhotoLibrary) OpenThumb(ctx context.Context, id PhotoID, size do
 			return nil, nil, err
 		}
 		defer baseImage.Close()
-		thumb, err := lib.thumber.CreateThumb(photo.Format, baseImage, domain.Small)
+		thumb, err := lib.thumber.CreateThumb(baseImage, photo.Format, photo.Orientation, domain.Small)
 		if err != nil {
 			logger.Error("Failed to created thumb", zap.Error(err))
 			return nil, nil, err
@@ -269,46 +271,6 @@ func (lib *BasicPhotoLibrary) OpenThumb(ctx context.Context, id PhotoID, size do
 		return nil, nil, err
 	}
 	return f, lib.thumbFormat, nil
-}
-
-func (lib *BasicPhotoLibrary) UpgradeDBStructures(ctx context.Context) error {
-	logger, ctx := logging.SubFrom(ctx, "fixBadPaths")
-	photos, err := lib.FindAll(ctx)
-	if err != nil {
-		return err
-	}
-	var count int
-	for _, p := range photos {
-		var changed bool
-		if isPathConversionNeeded(p.Path) {
-			oldPath := p.Path
-			p.Path = convertPath(oldPath)
-			changed = true
-			logger.Info("Fixed photo path", zap.String("photo", string(p.ID)), zap.String("path", p.Path), zap.String("oldpath", oldPath))
-		}
-		if !p.HasHash() {
-			in, err := lib.openPhoto(p.Path)
-			if err != nil {
-				return err
-			}
-			defer in.Close()
-			h, err := ComputeHash(in)
-			if err != nil {
-				return err
-			}
-			p.Hash = h
-			changed = true
-		}
-		if changed {
-			lib.db.Update(p)
-			count++
-		}
-	}
-	if count > 0 {
-		logger.Info("Fixed photos in DB", zap.Int("count", count))
-	}
-	return nil
-
 }
 
 func canonicalizeFilename(photo domain.Photo) (dir, filename string, id PhotoID) {

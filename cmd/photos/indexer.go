@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"bitbucket.org/kleinnic74/photos/consts"
 	"bitbucket.org/kleinnic74/photos/library"
 	"bitbucket.org/kleinnic74/photos/library/index"
 	"bitbucket.org/kleinnic74/photos/logging"
@@ -143,7 +144,7 @@ func (t findUnindexedTask) Describe() string {
 
 func (t findUnindexedTask) Execute(ctx context.Context, executor tasks.TaskExecutor, lib library.PhotoLibrary) error {
 	logger, ctx := logging.SubFrom(ctx, "findUnindexedTask")
-	photos, err := lib.FindAll(ctx)
+	photos, err := lib.FindAll(ctx, consts.Ascending)
 	if err != nil {
 		return err
 	}

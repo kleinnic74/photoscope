@@ -89,7 +89,7 @@ func TestCanonicalizePhoto(t *testing.T) {
 		{domain.NewPhotoFromFields("/some/path/myfile.jpg",
 			at("2015", "02", "24"),
 			somewhere(),
-			"jpg"),
+			"jpg", 1),
 			"2015/02/24",
 			"myfile.jpg",
 		},

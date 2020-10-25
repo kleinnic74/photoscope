@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"bitbucket.org/kleinnic74/photos/consts"
 	"bitbucket.org/kleinnic74/photos/library"
 	"github.com/boltdb/bolt"
 )
@@ -32,7 +33,7 @@ func TestAddThenFindAll(t *testing.T) {
 		if err := db.Add(photo); err != nil {
 			t.Fatalf("Failed to add photo: %s", err)
 		}
-		found, _ := db.FindAll()
+		found, _ := db.FindAll(consts.Ascending)
 		if len(found) != 1 {
 			t.Fatalf("Bad number of photos returned, expected %d, got %d", 1, len(found))
 		}

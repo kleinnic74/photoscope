@@ -5,10 +5,10 @@ go 1.13
 require (
 	github.com/boltdb/bolt v1.3.1
 	github.com/codingsince1985/geo-golang v1.6.1
+	github.com/disintegration/gift v1.2.1
 	github.com/google/uuid v1.1.1
 	github.com/gorilla/mux v1.7.4
 	github.com/h2non/filetype v1.1.0
-	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/reusee/mmh3 v0.0.0-20140820141314-64b85163255b
 	github.com/rwcarlsen/goexif v0.0.0-20190401172101-9e8deecbddbd

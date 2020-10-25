@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"bitbucket.org/kleinnic74/photos/consts"
 	"bitbucket.org/kleinnic74/photos/library"
 
 	"github.com/boltdb/bolt"
@@ -94,8 +95,11 @@ func (store *BoltStore) Add(p *library.Photo) error {
 		if err != nil {
 			return err
 		}
-		b = tx.Bucket(hashBucket)
-		return b.Put([]byte(p.Hash), []byte(p.ID))
+		if p.HasHash() {
+			b = tx.Bucket(hashBucket)
+			err = b.Put([]byte(p.Hash), []byte(p.ID))
+		}
+		return err
 	})
 }
 
@@ -122,27 +126,27 @@ func (store *BoltStore) Update(p *library.Photo) error {
 }
 
 // FindAll returns all photos in this store
-func (store *BoltStore) FindAll() ([]*library.Photo, error) {
+func (store *BoltStore) FindAll(order consts.SortOrder) ([]*library.Photo, error) {
 	photos, _, err := store.findRange(func(c Cursor) Cursor {
 		return c
-	})
+	}, order)
 	return photos, err
 }
 
 //FindAllPaged returns at most max photos from the store starting at photo index start
-func (store *BoltStore) FindAllPaged(start, max int) ([]*library.Photo, bool, error) {
+func (store *BoltStore) FindAllPaged(start, max int, order consts.SortOrder) ([]*library.Photo, bool, error) {
 	return store.findRange(func(c Cursor) Cursor {
 		return c.Skip(uint(start)).Limit(uint(max))
-	})
+	}, order)
 }
 
-func (store *BoltStore) findRange(f func(Cursor) Cursor) ([]*library.Photo, bool, error) {
+func (store *BoltStore) findRange(f func(Cursor) Cursor, order consts.SortOrder) ([]*library.Photo, bool, error) {
 	var found = make([]*library.Photo, 0)
 	var hasMore bool
 
 	err := store.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(photosBucket)
-		c := f(newForwardCursor(b.Cursor()))
+		c := f(newCursor(b.Cursor(), order))
 		for k, v := c.First(); k != nil; k, v = c.Next() {
 			var photo library.Photo
 			if err := json.Unmarshal(v, &photo); err != nil {
@@ -161,7 +165,7 @@ func (store *BoltStore) findRange(f func(Cursor) Cursor) ([]*library.Photo, bool
 }
 
 // Find returns all photos in this library between the given time instants
-func (store *BoltStore) Find(start, end time.Time) ([]*library.Photo, error) {
+func (store *BoltStore) Find(start, end time.Time, order consts.SortOrder) ([]*library.Photo, error) {
 	var found = make([]*library.Photo, 0)
 	min, max := boundaryIDs(start, end)
 	err := store.db.View(func(tx *bolt.Tx) error {

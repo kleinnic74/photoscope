@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"bitbucket.org/kleinnic74/photos/consts"
 	"bitbucket.org/kleinnic74/photos/domain"
 	"bitbucket.org/kleinnic74/photos/library"
 	"github.com/gorilla/mux"
@@ -56,15 +57,15 @@ func (lib *testLib) Add(ctx context.Context, p domain.Photo, content io.Reader) 
 	return nil
 }
 
-func (lib *testLib) FindAll(ctx context.Context) ([]*library.Photo, error) {
+func (lib *testLib) FindAll(ctx context.Context, order consts.SortOrder) ([]*library.Photo, error) {
 	return lib.photos, nil
 }
 
-func (lib *testLib) FindAllPaged(ctx context.Context, start, max int) ([]*library.Photo, bool, error) {
+func (lib *testLib) FindAllPaged(ctx context.Context, start, max int, order consts.SortOrder) ([]*library.Photo, bool, error) {
 	return lib.photos, false, nil
 }
 
-func (lib *testLib) Find(ctx context.Context, start, end time.Time) ([]*library.Photo, error) {
+func (lib *testLib) Find(ctx context.Context, start, end time.Time, order consts.SortOrder) ([]*library.Photo, error) {
 	return lib.photos, nil
 }
 

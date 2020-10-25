@@ -2,11 +2,13 @@
 package domain_test
 
 import (
+	"encoding/json"
 	"io"
 	"os"
 	"testing"
 
 	"bitbucket.org/kleinnic74/photos/domain"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestFormatById(t *testing.T) {
@@ -31,6 +33,7 @@ func TestFormatById(t *testing.T) {
 
 func TestJpegFormat(t *testing.T) {
 	r := mustOpenFile(t, "testdata/Canon_40D.jpg")
+	defer r.Close()
 	f, err := domain.FormatOf(r)
 	if err != nil {
 		t.Fatal(err)
@@ -40,7 +43,28 @@ func TestJpegFormat(t *testing.T) {
 	}
 }
 
-func mustOpenFile(t *testing.T, path string) io.Reader {
+func TestUnmarshalJSON(t *testing.T) {
+	data := []struct {
+		ext            string
+		expectedFormat domain.Format
+	}{
+		{`"jpg"`, domain.JPEG},
+		{`"JPG"`, domain.JPEG},
+		{`"MOV"`, domain.MOV},
+		{`"mov"`, domain.MOV},
+		{`"bad"`, domain.UnknownFormat},
+	}
+	for _, d := range data {
+		var f domain.FormatSpec
+		if err := json.Unmarshal([]byte(d.ext), &f); err != nil {
+			t.Fatalf("Error while JSON decoding: %s", err)
+		}
+		t.Logf("FormatSpec: %s", string(f))
+		assert.Equal(t, d.expectedFormat.Mime(), f.Mime())
+	}
+}
+
+func mustOpenFile(t *testing.T, path string) io.ReadCloser {
 	f, err := os.Open(path)
 	if err != nil {
 		t.Fatalf("Could not open test file %s: %s", path, err)

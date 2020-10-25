@@ -62,7 +62,10 @@ func TestDecodeCursor(t *testing.T) {
 		},
 	}
 	for i, d := range data {
-		decoded := cursor.DecodeFromString(d.Encoded, 33)
-		assert.Equal(t, d.Expected, decoded, "%d: bad cursor value", i)
+		actual := cursor.Cursor{PageSize: 33}
+		if err := cursor.DecodeFromString(d.Encoded, &actual); err != nil {
+			t.Fatalf("Failed to decode cursor: %s", err)
+		}
+		assert.Equal(t, d.Expected, actual, "%d: bad cursor value", i)
 	}
 }
