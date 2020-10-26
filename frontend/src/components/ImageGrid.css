@@ -7,7 +7,6 @@
 }
 
 .ImageGrid img {
-    width: 100%;
     overflow: hidden;
-    align-content: center;
+    place-self: center;
 }

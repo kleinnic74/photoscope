@@ -18,6 +18,7 @@ func TestThumbnailSize(t *testing.T) {
 	}{
 		{Medium, image.Rect(0, 0, 1920, 1080), image.Rect(0, 0, Medium.width, 1080*Medium.width/1920)},
 		{Medium, image.Rect(0, 0, 1080, 1920), image.Rect(0, 0, 1080*Medium.width/1920, Medium.width)},
+		{Small, image.Rect(0, 0, 500, 1000), image.Rect(0, 0, 500*Small.width/1000, Small.width)},
 	}
 	for i, d := range data {
 		t.Run(fmt.Sprintf("#%d", i), func(t *testing.T) {
