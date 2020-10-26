@@ -2,6 +2,8 @@ package logging
 
 import (
 	"context"
+	"fmt"
+	"os"
 
 	"bitbucket.org/kleinnic74/photos/consts"
 
@@ -18,19 +20,45 @@ const (
 var rootLogger *zap.Logger
 
 func init() {
-	var err error
 	devmode := consts.IsDevMode()
-	if devmode {
-		rootLogger, err = zap.NewDevelopment()
-	} else {
-		rootLogger, err = zap.NewProduction()
-	}
+	debugFilter := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+		return lvl >= zapcore.DebugLevel
+	})
+	infoFilter := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+		return lvl >= zapcore.InfoLevel
+	})
+	warnOrErrorFilter := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+		return lvl >= zapcore.WarnLevel
+	})
+	var core zapcore.Core
+	errorFile, err := os.OpenFile("errors.log", os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
 	if err != nil {
-		panic(err)
+		panic(fmt.Sprintf("Failed to open log file: %s", err))
 	}
+	if devmode {
+		consoleEncoder := zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())
+		jsonEncoder := zapcore.NewJSONEncoder(zap.NewDevelopmentEncoderConfig())
+		console := zapcore.Lock(os.Stdout)
+		core = zapcore.NewTee(
+			zapcore.NewCore(consoleEncoder, console, debugFilter),
+			zapcore.NewCore(jsonEncoder, errorFile, warnOrErrorFilter),
+		)
+	} else {
+		jsonEncoder := zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig())
+		logfile, err := os.OpenFile("log.json", os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to open log file: %s", err))
+		}
+		core = zapcore.NewTee(
+			zapcore.NewCore(jsonEncoder, logfile, infoFilter),
+			zapcore.NewCore(jsonEncoder, errorFile, warnOrErrorFilter),
+		)
+	}
+	rootLogger = zap.New(core)
 	rootLogger.With(zap.Bool("devmode", devmode)).Info("Logging initialized")
 }
 
+// From returns the logger of the current context, if no logger is available, returns the root logger
 func From(ctx context.Context) *zap.Logger {
 	l := ctx.Value(loggerKey)
 	if l == nil {
