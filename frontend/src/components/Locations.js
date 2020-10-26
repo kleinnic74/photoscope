@@ -30,7 +30,7 @@ export default class Locations extends Component {
         return (
             <div className="Tree">
                 <ul className="Tree-node">
-                    {countries.map((c) => <Country key={c.ciso} country={c} onClick={this.clickHandler} />)}
+                    {countries?.map((c) => <Country key={c.ciso} country={c} onClick={this.clickHandler} />)}
                 </ul>
             </div>
         )

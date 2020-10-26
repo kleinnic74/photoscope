@@ -25,7 +25,7 @@ func inferType(path string) string {
 	ext := strings.ToLower(filepath.Ext(path))
 	t := mime.TypeByExtension(ext)
 	if t == "" {
-		logging.From(context.Background()).Warn("Unkown MIME type", zap.String("ext", ext))
+		logging.From(context.Background()).Warn("Unknown MIME type", zap.String("ext", ext))
 		return "application/octet-stream"
 	}
 	return t

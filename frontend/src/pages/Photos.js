@@ -87,7 +87,7 @@ export default class Photos extends Component {
                     }, {}),
                     showImage: showImage,
                     index: i,
-                    image: this.absURL(data.data[i].links.view)
+                    image: data.data.length > 0 ? this.absURL(data.data[i].links.view) : undefined
                 })
             })
             .catch(error => console.log(error))

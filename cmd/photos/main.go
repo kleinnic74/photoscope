@@ -58,6 +58,7 @@ func init() {
 		logger.Fatal("Could not determine path", zap.String("dir", libDir), zap.Error(err))
 	}
 	libDir = absdir
+	logger.Info("Library directory", zap.String("dir", libDir))
 }
 
 func main() {
