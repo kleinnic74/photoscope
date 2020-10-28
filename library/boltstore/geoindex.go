@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"bitbucket.org/kleinnic74/photos/domain/gps"
 	"bitbucket.org/kleinnic74/photos/library"
@@ -15,7 +14,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const GeoIndexVersion = index.Version(2)
+const GeoIndexVersion = index.Version(3)
 
 type boltGeoIndex struct {
 	db *bolt.DB
@@ -23,13 +22,13 @@ type boltGeoIndex struct {
 
 var (
 	// placeOfPhotos tracks the location of each photo, indexed by PhotoID
-	placeOfPhotos = []byte("photoplaces")
+	placeOfPhotos = []byte("photoplaces_v3")
 	// photosByPlace tracks the photos at a given place, indexed by place key
-	photosByPlace = []byte("photosByPlace")
+	photosByPlace = []byte("photosByPlace_v3")
 	// allCountriesBucket contains all known countries, indexed by country code
-	allCountriesBucket = []byte("allcountries")
+	allCountriesBucket = []byte("allcountries_v3")
 	// placesByCountryBucket stores all places in a given country, indexed by country code
-	placesByCountryBucket = []byte("placesByCountry")
+	placesByCountryBucket = []byte("placesByCountry_v3")
 )
 
 const (
@@ -54,9 +53,19 @@ func NewBoltGeoIndex(db *bolt.DB) (library.GeoIndex, error) {
 	}, nil
 }
 
-func (index *boltGeoIndex) Has(ctx context.Context, id library.PhotoID) (exists bool) {
+func (idx *boltGeoIndex) Migrations() []index.MigrationSpec {
+	return []index.MigrationSpec{
+		{Target: index.Version(3), Migration: index.MigrationFunc(idx.deleteLegacyBuckets)},
+	}
+}
+
+func (idx *boltGeoIndex) deleteLegacyBuckets() error {
+	return deleteBuckets(idx.db, "photoplaces", "photosByPlace", "allcountries", "placesByCountry")
+}
+
+func (idx *boltGeoIndex) Has(ctx context.Context, id library.PhotoID) (exists bool) {
 	logger, ctx := logging.FromWithNameAndFields(ctx, "geoStore")
-	err := index.db.View(func(tx *bolt.Tx) error {
+	err := idx.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(placeOfPhotos)
 		exists = b.Get([]byte(id)) != nil
 		return nil
@@ -67,9 +76,9 @@ func (index *boltGeoIndex) Has(ctx context.Context, id library.PhotoID) (exists 
 	return
 }
 
-func (index *boltGeoIndex) Get(ctx context.Context, id library.PhotoID) (address *gps.Address, found bool, err error) {
+func (idx *boltGeoIndex) Get(ctx context.Context, id library.PhotoID) (address *gps.Address, found bool, err error) {
 	logger, ctx := logging.FromWithNameAndFields(ctx, "geoStore")
-	if err := index.db.View(func(tx *bolt.Tx) error {
+	if err := idx.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(placeOfPhotos)
 		data := b.Get([]byte(id))
 		found = data != nil
@@ -85,7 +94,7 @@ func (index *boltGeoIndex) Get(ctx context.Context, id library.PhotoID) (address
 	return
 }
 
-func (index *boltGeoIndex) Update(ctx context.Context, id library.PhotoID, address *gps.Address) error {
+func (idx *boltGeoIndex) Update(ctx context.Context, id library.PhotoID, address *gps.Address) error {
 	if address == nil {
 		return nil
 	}
@@ -93,7 +102,7 @@ func (index *boltGeoIndex) Update(ctx context.Context, id library.PhotoID, addre
 	if err != nil {
 		return err
 	}
-	return index.db.Update(func(tx *bolt.Tx) error {
+	return idx.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket(placeOfPhotos)
 		if err := b.Put([]byte(id), encodedAddress); err != nil {
 			return err
@@ -104,22 +113,22 @@ func (index *boltGeoIndex) Update(ctx context.Context, id library.PhotoID, addre
 		if err != nil {
 			return err
 		}
-		allCountries.Put([]byte(address.Country.Code), encodedCountry)
+		allCountries.Put([]byte(address.Country.ID), encodedCountry)
 
 		placesByCountry := tx.Bucket(placesByCountryBucket)
-		placesInCountryBucketName := []byte(address.Country.Code)
+		placesInCountryBucketName := []byte(address.Country.ID)
 
 		placesInCountry, err := placesByCountry.CreateBucketIfNotExists(placesInCountryBucketName)
 		if err != nil {
 			return err
 		}
-		fullKey, inCountryKey := placeKeys(*address)
-		if err := placesInCountry.Put(inCountryKey, encodedAddress); err != nil {
+		placeID := []byte(address.ID)
+		if err := placesInCountry.Put(placeID, encodedAddress); err != nil {
 			return err
 		}
 
 		photosByPlace := tx.Bucket(photosByPlace)
-		photosAtPlace, err := photosByPlace.CreateBucketIfNotExists(fullKey)
+		photosAtPlace, err := photosByPlace.CreateBucketIfNotExists(placeID)
 		if err != nil {
 			return err
 		}
@@ -127,26 +136,9 @@ func (index *boltGeoIndex) Update(ctx context.Context, id library.PhotoID, addre
 	})
 }
 
-func fullPlaceKey(country string, zip string) string {
-	country = strings.ToUpper(country)
-	zip = strings.ToLower(zip)
-	return fmt.Sprintf("%s/%s", country, zip)
-}
-
-func placeKeys(place gps.Address) ([]byte, []byte) {
-	var placeKey string
-	if place.Zip != "" {
-		placeKey = place.Zip
-	} else {
-		placeKey = unknownPlacesKey
-	}
-	fullKey := fullPlaceKey(place.Code, placeKey)
-	return []byte(fullKey), []byte(placeKey)
-}
-
-func (index *boltGeoIndex) Locations(ctx context.Context) (*library.Locations, error) {
+func (idx *boltGeoIndex) Locations(ctx context.Context) (*library.Locations, error) {
 	var locations library.Locations
-	err := index.db.View(func(tx *bolt.Tx) error {
+	err := idx.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(allCountriesBucket)
 		return b.ForEach(func(k, v []byte) error {
 			var country gps.Country
@@ -157,14 +149,14 @@ func (index *boltGeoIndex) Locations(ctx context.Context) (*library.Locations, e
 			countryAndPlaces.Country = country
 
 			placesByCountry := tx.Bucket(placesByCountryBucket)
-			if places := placesByCountry.Bucket([]byte(country.Code)); places != nil {
+			if places := placesByCountry.Bucket([]byte(country.ID)); places != nil {
 				c := places.Cursor()
 				for k, v := c.First(); k != nil; k, v = c.Next() {
 					var address gps.Address
 					if err := json.Unmarshal(v, &address); err != nil {
 						return err
 					}
-					countryAndPlaces.Places = append(countryAndPlaces.Places, &address.Place)
+					countryAndPlaces.Places = append(countryAndPlaces.Places, &address)
 				}
 			}
 			locations.Countries = append(locations.Countries, &countryAndPlaces)
@@ -174,11 +166,10 @@ func (index *boltGeoIndex) Locations(ctx context.Context) (*library.Locations, e
 	return &locations, err
 }
 
-func (index *boltGeoIndex) FindByPlacePaged(ctx context.Context, country string, zip string, startAt int, maxCount int) (photos []library.PhotoID, hasMore bool, err error) {
-	err = index.db.View(func(tx *bolt.Tx) error {
+func (idx *boltGeoIndex) FindByPlacePaged(ctx context.Context, placeID gps.PlaceID, startAt int, maxCount int) (photos []library.PhotoID, hasMore bool, err error) {
+	err = idx.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(photosByPlace)
-		key := fullPlaceKey(country, zip)
-		sub := b.Bucket([]byte(key))
+		sub := b.Bucket([]byte(placeID))
 		if sub == nil {
 			return nil
 		}
@@ -202,8 +193,8 @@ func (index *boltGeoIndex) FindByPlacePaged(ctx context.Context, country string,
 	return
 }
 
-func (index *boltGeoIndex) FindByCountryPaged(ctx context.Context, country string, startAt int, maxCount int) (photos []library.PhotoID, hasMore bool, err error) {
-	err = index.db.View(func(tx *bolt.Tx) error {
+func (idx *boltGeoIndex) FindByCountryPaged(ctx context.Context, country gps.CountryID, startAt int, maxCount int) (photos []library.PhotoID, hasMore bool, err error) {
+	err = idx.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(photosByPlace)
 		keyPrefix := []byte(fmt.Sprintf("%s/", country))
 		buckets := b.Cursor()

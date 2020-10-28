@@ -57,6 +57,21 @@ func createBucket(db *bolt.DB, name []byte) error {
 	})
 }
 
+func deleteBuckets(db *bolt.DB, names ...string) error {
+	return db.Update(func(tx *bolt.Tx) error {
+		for _, name := range names {
+			b := tx.Bucket([]byte(name))
+			if b == nil {
+				continue
+			}
+			if err := tx.DeleteBucket([]byte(name)); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 // Close closes this store
 func (store *BoltStore) Close() {
 }

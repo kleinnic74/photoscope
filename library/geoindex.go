@@ -12,7 +12,7 @@ type Locations struct {
 
 type CountryAndPlaces struct {
 	gps.Country
-	Places []*gps.Place `json:"places"`
+	Places []*gps.Address `json:"places"`
 }
 
 type GeoIndex interface {
@@ -21,6 +21,6 @@ type GeoIndex interface {
 	Update(context.Context, PhotoID, *gps.Address) error
 
 	Locations(context.Context) (*Locations, error)
-	FindByPlacePaged(context.Context, string, string, int, int) ([]PhotoID, bool, error)
-	FindByCountryPaged(context.Context, string, int, int) ([]PhotoID, bool, error)
+	FindByPlacePaged(context.Context, gps.PlaceID, int, int) ([]PhotoID, bool, error)
+	FindByCountryPaged(context.Context, gps.CountryID, int, int) ([]PhotoID, bool, error)
 }
