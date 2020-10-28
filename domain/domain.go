@@ -139,7 +139,6 @@ func NewPhoto(path string) (Photo, error) {
 func guessMeta(fileinfo os.FileInfo) *MediaMetaData {
 	return &MediaMetaData{
 		DateTaken: fileinfo.ModTime(),
-		Location:  gps.Unknown,
 	}
 }
 

@@ -41,7 +41,7 @@ func NewGeoLookupTaskWith(index library.GeoIndex, id library.PhotoID, coords gps
 
 func LookupPhotoOnAdd(index library.GeoIndex) tasks.DeferredNewPhotoCallback {
 	return func(ctx context.Context, p *library.Photo) (tasks.Task, bool) {
-		if p.Location == nil {
+		if p.Location == nil || !p.Location.IsValid() {
 			return nil, false
 		}
 		return NewGeoLookupTaskWith(index, p.ID, *p.Location), true

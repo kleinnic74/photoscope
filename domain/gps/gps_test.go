@@ -17,7 +17,7 @@ func TestCoordinatesToISO6709(t *testing.T) {
 		{lat: 45.3, long: -43.2344, iso: "+45.300000-043.234400/"},
 	}
 	for _, tt := range data {
-		c := NewCoordinates(tt.lat, tt.long)
+		c, _ := NewCoordinates(tt.lat, tt.long)
 		iso := c.ISO6709()
 		if iso != tt.iso {
 			t.Errorf("Bad ISO6709 value, expected %s, got %s", tt.iso, iso)
@@ -26,7 +26,7 @@ func TestCoordinatesToISO6709(t *testing.T) {
 }
 
 func TestMarshalUnmarshalJSON(t *testing.T) {
-	coords := NewCoordinates(12, 34)
+	coords, _ := NewCoordinates(12, 34)
 	data, err := json.Marshal(&coords)
 	if err != nil {
 		t.Errorf("Failed to marshalJSON: %s", err)
@@ -35,7 +35,7 @@ func TestMarshalUnmarshalJSON(t *testing.T) {
 	if err = json.Unmarshal(data, &result); err != nil {
 		t.Errorf("Failed to unmarshalJSON: %s", err)
 	}
-	assert.Equal(t, coords, result)
+	assert.Equal(t, *coords, result)
 }
 
 func BenchmarkMNarshalJSON(b *testing.B) {

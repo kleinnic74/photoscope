@@ -43,13 +43,15 @@ func TestMarshallJSON(t *testing.T) {
 				ID:        "id",
 				Path:      "to/file",
 				Format:    domain.MustFormatForExt("jpg"),
-				Location:  gps.NewCoordinates(12, 34),
+				Location:  gps.MustNewCoordinates(12, 34),
 				DateTaken: time.Now(),
 			},
 			JSON: `{
+  "schema": 1,
   "id": "id",
   "path": "to/file",
   "format": "jpg",
+  "size": 0,
   "dateUN": %d,
   "gps": {
     "lat": 12,
@@ -123,6 +125,7 @@ func at(year, month, day string) time.Time {
 }
 
 func somewhere() *gps.Coordinates {
-	return gps.NewCoordinates((rand.Float64()-0.5)*360,
+	coords, _ := gps.NewCoordinates((rand.Float64()-0.5)*360,
 		(rand.Float64()-0.5)*90)
+	return coords
 }

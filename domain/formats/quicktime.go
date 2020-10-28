@@ -285,7 +285,9 @@ func setLocation(qt *Quicktime, key, value string) error {
 		if err != nil {
 			return nil
 		}
-		qt.coords = gps.NewCoordinates(lat, long)
+		if coords, err := gps.NewCoordinates(lat, long); err == nil {
+			qt.coords = coords
+		}
 	}
 	return nil
 }

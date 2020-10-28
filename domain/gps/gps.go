@@ -1,11 +1,12 @@
 package gps
 
 import (
+	"errors"
 	"fmt"
 )
 
 var (
-	Unknown *Coordinates
+	InvalidGPSCoordinates = errors.New("Invalid GPS coordinates")
 )
 
 type Coordinates struct {
@@ -13,8 +14,29 @@ type Coordinates struct {
 	Long float64 `json:"long"`
 }
 
-func NewCoordinates(lat, long float64) *Coordinates {
-	return &Coordinates{Lat: lat, Long: long}
+const (
+	latMin  = float64(-90.)
+	latMax  = float64(90.)
+	longMin = float64(-180.)
+	longMax = float64(180.)
+)
+
+func NewCoordinates(lat, lon float64) (*Coordinates, error) {
+	if lat < latMin || lat > latMax || lon < longMin || lon > longMax {
+		return nil, InvalidGPSCoordinates
+	}
+	return &Coordinates{Lat: lat, Long: lon}, nil
+}
+
+func MustNewCoordinates(lat, lon float64) *Coordinates {
+	if lat < latMin || lat > latMax || lon < longMin || lon > longMax {
+		panic(fmt.Sprintf("Invalid GPS coordinates [%f;%f]", lat, lon))
+	}
+	return &Coordinates{lat, lon}
+}
+
+func (c Coordinates) IsValid() bool {
+	return c.Lat >= latMin && c.Lat <= latMax && c.Long >= longMin && c.Long <= longMax
 }
 
 func (c Coordinates) String() string {
@@ -27,8 +49,4 @@ func (c Coordinates) DistanceTo(other *Coordinates) float64 {
 
 func (c *Coordinates) ISO6709() string {
 	return fmt.Sprintf("%+010.6f%+011.6f/", c.Lat, c.Long)
-}
-
-func init() {
-	Unknown = &Coordinates{0, 0}
 }

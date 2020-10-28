@@ -16,7 +16,7 @@ type Photo struct {
 	schema      uint
 	ID          PhotoID            `json:"id"`
 	Path        string             `json:"path"`
-	Size        int64              `json:"size"`
+	Size        int64              `json:"size,omitempty"`
 	Orientation domain.Orientation `json:"or,omitempty"`
 	Format      domain.FormatSpec  `json:"format"`
 	DateTaken   time.Time          `json:"dateUN,omitempty"`

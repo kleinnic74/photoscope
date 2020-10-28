@@ -143,6 +143,12 @@ func RegisterFormat(typeID MediaType, extension string, mime string,
 }
 
 func FormatForExt(ext string) (Format, bool) {
+	if len(ext) == 0 {
+		return nil, false
+	}
+	if ext[0] == '.' {
+		ext = ext[1:]
+	}
 	f, found := formatsById[ext]
 	return f, found
 }
@@ -226,7 +232,9 @@ func exifReader(in io.Reader, meta *MediaMetaData) error {
 		meta.DateTaken = dateTaken
 	}
 	if lat, long, err := ex.LatLong(); err == nil {
-		meta.Location = gps.NewCoordinates(lat, long)
+		if coords, err := gps.NewCoordinates(lat, long); err == nil {
+			meta.Location = coords
+		}
 	}
 	if tag, err := ex.Get(exif.Orientation); err == nil && tag.Count > 0 {
 		if orientation, err := tag.Int(0); err == nil {

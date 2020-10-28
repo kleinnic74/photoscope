@@ -10,11 +10,17 @@ import (
 var addressData = []struct {
 	JSON   string
 	STRUCT Address
+	ID     PlaceID
 }{
-	{JSON: `{"country":"France","ciso":"FR","city":"Nice","zip":"06000"}`,
-		STRUCT: Address{Country: Country{Country: "France", Code: "FR"},
-			Place: Place{City: "Nice", Zip: "06000"},
+	{JSON: `{"country":"France","ciso":"fr","city":"Nice","zip":"06000"}`,
+		STRUCT: Address{
+			AddressFields: AddressFields{
+				Country: Country{Country: "France", ID: CountryIDFromString("FR")},
+				City:    "Nice",
+				Zip:     "06000",
+			},
 		},
+		ID: PlaceID("fr/06000/nice"),
 	},
 }
 
@@ -24,7 +30,8 @@ func TestUnmarshalAddress(t *testing.T) {
 		if err := json.Unmarshal([]byte(d.JSON), &a); err != nil {
 			t.Fatalf("#%d: error while unmarshalling JSON: %s", i, err)
 		}
-		assert.Equal(t, d.STRUCT, a)
+		assert.Equal(t, d.STRUCT.AddressFields, a.AddressFields)
+		assert.Equal(t, d.ID, a.ID)
 	}
 }
 
