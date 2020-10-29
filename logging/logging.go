@@ -15,6 +15,7 @@ type loggerKeyType string
 
 const (
 	loggerKey = loggerKeyType("logger")
+	errorLog  = false
 )
 
 var rootLogger *zap.Logger
@@ -30,31 +31,33 @@ func init() {
 	warnOrErrorFilter := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
 		return lvl >= zapcore.WarnLevel
 	})
-	var core zapcore.Core
-	errorFile, err := os.OpenFile("errors.log", os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to open log file: %s", err))
+
+	var jsonEncoder zapcore.Encoder
+	if devmode {
+		jsonEncoder = zapcore.NewJSONEncoder(zap.NewDevelopmentEncoderConfig())
+	} else {
+		jsonEncoder = zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig())
+	}
+	var cores []zapcore.Core
+	if errorLog {
+		errorFile, err := os.OpenFile("errors.log", os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to open log file: %s", err))
+		}
+		cores = append(cores, zapcore.NewCore(jsonEncoder, errorFile, warnOrErrorFilter))
 	}
 	if devmode {
 		consoleEncoder := zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())
-		jsonEncoder := zapcore.NewJSONEncoder(zap.NewDevelopmentEncoderConfig())
 		console := zapcore.Lock(os.Stdout)
-		core = zapcore.NewTee(
-			zapcore.NewCore(consoleEncoder, console, debugFilter),
-			zapcore.NewCore(jsonEncoder, errorFile, warnOrErrorFilter),
-		)
+		cores = append(cores, zapcore.NewCore(consoleEncoder, console, debugFilter))
 	} else {
-		jsonEncoder := zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig())
 		logfile, err := os.OpenFile("log.json", os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
 		if err != nil {
 			panic(fmt.Sprintf("Failed to open log file: %s", err))
 		}
-		core = zapcore.NewTee(
-			zapcore.NewCore(jsonEncoder, logfile, infoFilter),
-			zapcore.NewCore(jsonEncoder, errorFile, warnOrErrorFilter),
-		)
+		cores = append(cores, zapcore.NewCore(jsonEncoder, logfile, infoFilter))
 	}
-	rootLogger = zap.New(core)
+	rootLogger = zap.New(zapcore.NewTee(cores...))
 	rootLogger.With(zap.Bool("devmode", devmode)).Info("Logging initialized")
 }
 

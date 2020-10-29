@@ -14,7 +14,8 @@ BINARIES=$(BINARY_WIN) $(BINARY_ARM) $(TOOLS)
 
 FRONTEND=frontend/
 
-GO_VARS=
+GO_DEBUG_VAR=-X 'bitbucket.org/kleinnic74/photos/consts.devmode=true'
+GO_VARS=$(GO_DEBUG_VAR) -X 'bitbucket.org/kleinnic74/photos/logging.errorLog=true'
 GO_ARM=CGO_ENABLED=0 GOARM=7 GOARCH=arm GOOS=linux
 
 .PHONY: all
@@ -32,7 +33,7 @@ $(BINARY_WIN): $(BINDIR) generate
 
 .PHONY: $(BINARY_ARM) 
 $(BINARY_ARM): $(BINDIR) generate
-	$(GO_ARM) go build $(GO_VARS) -o $(BINARY_ARM) $(PKG)
+	$(GO_ARM) go build -ldflags "$(GO_VARS)" -o $(BINARY_ARM) $(PKG)
 
 .PHONY: tools
 tools:
@@ -57,13 +58,13 @@ clean:
 	go clean ./...
 
 .PHONY: run
+run: GO_DEBUG_VAR=-X 'bitbucket.org/kleinnic74/photos/consts.devmode=false'
 run: $(BINARY_WIN) $(TMPDIR)
 	cd $(TMPDIR) && ../$(BINARY_WIN) -ui ../frontend/build
 
 .PHONY: rundev
 rundev: run
 
-rundev: GO_VARS=-X 'bitbucket.org/kleinnic74/photos/consts.devmode=true'
 
 .PHONY: generate
 generate: embed/embedded_resources.go
