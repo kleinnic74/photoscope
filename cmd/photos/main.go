@@ -93,7 +93,9 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to initialize geoindex", zap.Error(err))
 	}
-	geocoding.RegisterTasks(taskRepo, geoindex)
+	geocoder := geocoding.NewGeocoder(geoindex)
+	geocoder.RegisterTasks(taskRepo)
+
 	RegisterDBUpgradeTasks(taskRepo, lib)
 
 	dateindex, err := boltstore.NewDateIndex(db)
@@ -107,7 +109,7 @@ func main() {
 
 	indexer := NewIndexer(indexTracker, executor)
 	indexer.RegisterDirect("date", boltstore.DateIndexVersion, dateindex.Add)
-	indexer.RegisterDefered("geo", boltstore.GeoIndexVersion, geocoding.LookupPhotoOnAdd(geoindex))
+	indexer.RegisterDefered("geo", boltstore.GeoIndexVersion, geocoder.LookupPhotoOnAdd)
 
 	indexer.RegisterTasks(taskRepo)
 
