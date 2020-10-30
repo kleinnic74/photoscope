@@ -26,7 +26,7 @@ func NewGeoHandler(index library.GeoIndex, photos library.PhotoLibrary) *GeoHand
 
 func (g *GeoHandler) InitRoutes(r *mux.Router) {
 	r.HandleFunc("/geo/photos/byplace/{placeID}", g.getPhotosByPlace).Methods("GET")
-	r.HandleFunc("/geo/photos/bycountry/{country}", g.getPhotosByCountry).Methods("GET")
+	r.HandleFunc("/geo/photos/bycountry/{countryID}", g.getPhotosByCountry).Methods("GET")
 	r.HandleFunc("/geo/index", g.getGeoIndex).Methods("GET")
 }
 

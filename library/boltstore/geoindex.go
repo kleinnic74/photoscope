@@ -8,13 +8,12 @@ import (
 
 	"bitbucket.org/kleinnic74/photos/domain/gps"
 	"bitbucket.org/kleinnic74/photos/library"
-	"bitbucket.org/kleinnic74/photos/library/index"
 	"bitbucket.org/kleinnic74/photos/logging"
 	"github.com/boltdb/bolt"
 	"go.uber.org/zap"
 )
 
-const GeoIndexVersion = index.Version(3)
+const GeoIndexVersion = library.Version(3)
 
 type boltGeoIndex struct {
 	db *bolt.DB
@@ -53,10 +52,10 @@ func NewBoltGeoIndex(db *bolt.DB) (library.GeoIndex, error) {
 	}, nil
 }
 
-func (idx *boltGeoIndex) Migrations() []index.MigrationSpec {
-	return []index.MigrationSpec{
-		{Target: index.Version(3), Migration: index.MigrationFunc(idx.deleteLegacyBuckets)},
-	}
+func (idx *boltGeoIndex) MigrateStructure(ctx context.Context, from library.Version) (library.Version, error) {
+	migrations := library.NewStructuralMigrations()
+	migrations.Register(library.Version(3), library.StructuralMigrationFunc(idx.deleteLegacyBuckets))
+	return GeoIndexVersion, migrations.Apply(from, GeoIndexVersion)
 }
 
 func (idx *boltGeoIndex) deleteLegacyBuckets() error {

@@ -5,13 +5,12 @@ import (
 	"time"
 
 	"bitbucket.org/kleinnic74/photos/library"
-	"bitbucket.org/kleinnic74/photos/library/index"
 	"bitbucket.org/kleinnic74/photos/logging"
 	"github.com/boltdb/bolt"
 	"go.uber.org/zap"
 )
 
-const DateIndexVersion = index.Version(1)
+const DateIndexVersion = library.Version(1)
 
 // DateIndex indexes photos by date
 type DateIndex struct {

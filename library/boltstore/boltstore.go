@@ -5,7 +5,6 @@ package boltstore
 import (
 	"bytes"
 	"encoding/json"
-	"log"
 	"strings"
 	"time"
 
@@ -93,7 +92,6 @@ func (store *BoltStore) Add(p *library.Photo) error {
 	id := sortableID(p.DateTaken, string(p.ID))
 	encoded, err := json.Marshal(p)
 	if err != nil {
-		log.Printf("Error: failed to encode photo: %s", err)
 		return err
 	}
 	return store.db.Update(func(tx *bolt.Tx) error {
@@ -165,7 +163,6 @@ func (store *BoltStore) findRange(f func(Cursor) Cursor, order consts.SortOrder)
 		for k, v := c.First(); k != nil; k, v = c.Next() {
 			var photo library.Photo
 			if err := json.Unmarshal(v, &photo); err != nil {
-				log.Printf("Error: could not unmarshal photo: %s", err)
 				return err
 			}
 			found = append(found, &photo)
@@ -173,9 +170,6 @@ func (store *BoltStore) findRange(f func(Cursor) Cursor, order consts.SortOrder)
 		hasMore = c.HasMore()
 		return nil
 	})
-	if err != nil {
-		log.Printf("Could not read photos: %s", err)
-	}
 	return found, hasMore, err
 }
 
@@ -190,16 +184,12 @@ func (store *BoltStore) Find(start, end time.Time, order consts.SortOrder) ([]*l
 		for k, v := c.Seek(min); k != nil && bytes.Compare(k, max) <= 0; k, v = c.Next() {
 			var photo library.Photo
 			if err := json.Unmarshal(v, &photo); err != nil {
-				log.Printf("Error: could not unmarshal photo: %s", err)
 				return err
 			}
 			found = append(found, &photo)
 		}
 		return nil
 	})
-	if err != nil {
-		log.Printf("Could not read photos: %s", err)
-	}
 	return found, err
 }
 
@@ -214,7 +204,6 @@ func (store *BoltStore) Get(id library.PhotoID) (*library.Photo, error) {
 		var photo library.Photo
 		if data := tx.Bucket(photosBucket).Get(internalID); data != nil {
 			if err := json.Unmarshal(data, &photo); err != nil {
-				log.Printf("Error: could not unmarshal photo: %s", err)
 				return err
 			}
 			found = &photo

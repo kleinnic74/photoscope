@@ -1,4 +1,4 @@
-package main
+package index
 
 import (
 	"context"
@@ -6,24 +6,23 @@ import (
 
 	"bitbucket.org/kleinnic74/photos/consts"
 	"bitbucket.org/kleinnic74/photos/library"
-	"bitbucket.org/kleinnic74/photos/library/index"
 	"bitbucket.org/kleinnic74/photos/logging"
 	"bitbucket.org/kleinnic74/photos/tasks"
 	"go.uber.org/zap"
 )
 
 type Indexer struct {
-	tracker  index.Tracker
+	tracker  Tracker
 	executor tasks.TaskExecutor
 
-	indexers map[index.Name]interface{}
+	indexers map[Name]interface{}
 }
 
-func NewIndexer(tracker index.Tracker, executor tasks.TaskExecutor) *Indexer {
+func NewIndexer(tracker Tracker, executor tasks.TaskExecutor) *Indexer {
 	return &Indexer{
 		tracker:  tracker,
 		executor: executor,
-		indexers: make(map[index.Name]interface{}),
+		indexers: make(map[Name]interface{}),
 	}
 }
 
@@ -56,21 +55,21 @@ func (indexer *Indexer) Add(ctx context.Context, photo *library.Photo) error {
 	return nil
 }
 
-func (indexer *Indexer) RegisterDefered(name index.Name, version index.Version, init tasks.DeferredNewPhotoCallback) {
+func (indexer *Indexer) RegisterDefered(name Name, version library.Version, init tasks.DeferredNewPhotoCallback) {
 	indexer.tracker.RegisterIndex(name, version)
 	indexer.indexers[name] = init
 }
 
-func (indexer *Indexer) RegisterDirect(name index.Name, version index.Version, init library.NewPhotoCallback) {
+func (indexer *Indexer) RegisterDirect(name Name, version library.Version, init library.NewPhotoCallback) {
 	indexer.tracker.RegisterIndex(name, version)
 	indexer.indexers[name] = init
 }
 
-func (indexer *Indexer) GetMissingIndexes(id library.PhotoID) ([]index.Name, error) {
+func (indexer *Indexer) GetMissingIndexes(id library.PhotoID) ([]Name, error) {
 	return indexer.tracker.GetMissingIndexes(id)
 }
 
-func (indexer *Indexer) indexDeferred(ctx context.Context, photo *library.Photo, name index.Name) {
+func (indexer *Indexer) indexDeferred(ctx context.Context, photo *library.Photo, name Name) {
 	delegate, found := indexer.indexers[name]
 	if !found {
 		return
@@ -86,7 +85,7 @@ func (indexer *Indexer) indexDeferred(ctx context.Context, photo *library.Photo,
 	return
 }
 
-func (indexer *Indexer) GetIndexes() (indexers []index.Name) {
+func (indexer *Indexer) GetIndexes() (indexers []Name) {
 	for k := range indexer.indexers {
 		indexers = append(indexers, k)
 	}
@@ -94,8 +93,8 @@ func (indexer *Indexer) GetIndexes() (indexers []index.Name) {
 }
 
 type deferredCallback struct {
-	tracker index.Tracker
-	name    index.Name
+	tracker Tracker
+	name    Name
 	f       library.NewPhotoCallback
 	photo   *library.Photo
 }
@@ -109,8 +108,8 @@ func (t *deferredCallback) Execute(ctx context.Context, executor tasks.TaskExecu
 }
 
 type wrappedTask struct {
-	tracker index.Tracker
-	name    index.Name
+	tracker Tracker
+	name    Name
 	id      library.PhotoID
 	task    tasks.Task
 }

@@ -59,11 +59,15 @@ clean:
 
 .PHONY: run
 run: GO_DEBUG_VAR=-X 'bitbucket.org/kleinnic74/photos/consts.devmode=false'
-run: $(BINARY_WIN) $(TMPDIR)
+run: _run
+
+.PHONY: _run
+_run: $(BINARY_WIN) $(TMPDIR)
 	cd $(TMPDIR) && ../$(BINARY_WIN) -ui ../frontend/build
 
 .PHONY: rundev
-rundev: run
+rundev: GO_DEBUG_VAR=-X 'bitbucket.org/kleinnic74/photos/consts.devmode=true'
+rundev: _run
 
 
 .PHONY: generate
@@ -79,3 +83,10 @@ frontend/build: $(wildcard frontend/src/**/*) $(wildcard frontend/public/**/*)
 .PHONY: runui
 runui:
 	cd frontend && npm start
+
+.PHONY: deps
+
+deps: deptree.svg
+
+deptree.svg:
+	godepgraph -s ./cmd/photos | dot -Tsvg >deptree.svg

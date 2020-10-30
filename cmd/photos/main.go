@@ -21,6 +21,7 @@ import (
 	"bitbucket.org/kleinnic74/photos/domain"
 	"bitbucket.org/kleinnic74/photos/geocoding"
 	"bitbucket.org/kleinnic74/photos/importer"
+	"bitbucket.org/kleinnic74/photos/index"
 	"bitbucket.org/kleinnic74/photos/library"
 	"bitbucket.org/kleinnic74/photos/library/boltstore"
 	"bitbucket.org/kleinnic74/photos/logging"
@@ -76,38 +77,50 @@ func main() {
 		logger.Fatal("Failed to initialize library", zap.Error(err))
 	}
 	defer db.Close()
+
+	migrator, err := index.NewMigrationCoordinator(db)
+	if err != nil {
+		logger.Fatal("Failed to initialize migration coordinator", zap.Error(err))
+	}
+
 	indexTracker, err := boltstore.NewIndexTracker(db)
 	if err != nil {
 		logger.Fatal("Failed to initialize library", zap.Error(err))
 	}
+
 	store, err := boltstore.NewBoltStore(db)
 	if err != nil {
 		logger.Fatal("Failed to initialize library", zap.Error(err))
 	}
+
 	lib, err := library.NewBasicPhotoLibrary(libDir, store, domain.LocalThumber{})
 	if err != nil {
 		logger.Fatal("Failed to initialize library", zap.Error(err))
 	}
 	logger.Info("Opened photo library", zap.String("path", libDir))
+	migrator.AddInstances(lib)
+
 	geoindex, err := boltstore.NewBoltGeoIndex(db)
 	if err != nil {
 		logger.Fatal("Failed to initialize geoindex", zap.Error(err))
 	}
+	migrator.AddStructure("geo", geoindex)
+
 	geocoder := geocoding.NewGeocoder(geoindex)
 	geocoder.RegisterTasks(taskRepo)
-
-	RegisterDBUpgradeTasks(taskRepo, lib)
 
 	dateindex, err := boltstore.NewDateIndex(db)
 	if err != nil {
 		logger.Fatal("Failed to initialize dataindex", zap.Error(err))
 	}
 
+	RegisterMigrationTask(taskRepo, migrator)
+
 	executor := tasks.NewSerialTaskExecutor(lib)
 	executorContext, cancelExecutor := context.WithCancel(ctx)
 	go executor.DrainTasks(executorContext)
 
-	indexer := NewIndexer(indexTracker, executor)
+	indexer := index.NewIndexer(indexTracker, executor)
 	indexer.RegisterDirect("date", boltstore.DateIndexVersion, dateindex.Add)
 	indexer.RegisterDefered("geo", boltstore.GeoIndexVersion, geocoder.LookupPhotoOnAdd)
 

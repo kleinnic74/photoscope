@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
+	"bitbucket.org/kleinnic74/photos/index"
 	"bitbucket.org/kleinnic74/photos/library"
-	"bitbucket.org/kleinnic74/photos/library/index"
 	"github.com/boltdb/bolt"
 )
 
@@ -18,7 +18,7 @@ func testAddToIndexTracker(t *testing.T, db *bolt.DB) {
 	if err != nil {
 		t.Fatalf("Failed to init index tracker: %s", err)
 	}
-	tracker.RegisterIndex("geo", index.Version(1))
+	tracker.RegisterIndex("geo", library.Version(1))
 	data := []struct {
 		ID                  library.PhotoID
 		err                 error

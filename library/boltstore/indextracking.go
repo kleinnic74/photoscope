@@ -3,8 +3,8 @@ package boltstore
 import (
 	"encoding/json"
 
+	"bitbucket.org/kleinnic74/photos/index"
 	"bitbucket.org/kleinnic74/photos/library"
-	"bitbucket.org/kleinnic74/photos/library/index"
 	"github.com/boltdb/bolt"
 )
 
@@ -14,7 +14,7 @@ var (
 
 type indexTracker struct {
 	db      *bolt.DB
-	indexes map[index.Name]index.Version
+	indexes map[index.Name]library.Version
 }
 
 // NewIndexTracker returns a new index tracker using the given BoltDB. The needed
@@ -26,10 +26,10 @@ func NewIndexTracker(db *bolt.DB) (index.Tracker, error) {
 	}); err != nil {
 		return nil, err
 	}
-	return &indexTracker{db: db, indexes: make(map[index.Name]index.Version)}, nil
+	return &indexTracker{db: db, indexes: make(map[index.Name]library.Version)}, nil
 }
 
-func (tracker *indexTracker) RegisterIndex(index index.Name, version index.Version) {
+func (tracker *indexTracker) RegisterIndex(index index.Name, version library.Version) {
 	tracker.indexes[index] = version
 }
 

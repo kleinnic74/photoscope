@@ -303,3 +303,82 @@ func ComputeHash(in io.Reader) (BinaryHash, error) {
 	}
 	return BinaryHash(base64.StdEncoding.EncodeToString(h.Sum(nil))), nil
 }
+
+func (lib *BasicPhotoLibrary) MigrateInstances(ctx context.Context) error {
+	migrations := instanceMigrations()
+	logger, ctx := logging.SubFrom(ctx, "upgradeDB")
+	photos, err := lib.FindAll(ctx, consts.Ascending)
+	if err != nil {
+		return err
+	}
+	var count int
+	for _, p := range photos {
+		updated, err := migrations.Apply(ctx, *p, func() (io.ReadCloser, error) {
+			return lib.openPhoto(p.Path)
+		})
+		if err != nil {
+			logger.Warn("Migration failed", zap.String("photo", string(p.ID)))
+			continue
+		}
+		if updated != *p {
+			logger.Info("Photo migrated", zap.String("photo", string(p.ID)))
+			lib.db.Update(&updated)
+			count++
+		}
+	}
+	if count > 0 {
+		logger.Info("Fixed photos in DB", zap.Int("count", count))
+	}
+	return nil
+}
+
+func migratePath(ctx context.Context, p Photo, _ ReaderFunc) (Photo, error) {
+	logger, ctx := logging.SubFrom(ctx, "migratePath")
+	if !isPathConversionNeeded(p.Path) {
+		return p, nil
+	}
+	oldPath := p.Path
+	p.Path = convertPath(oldPath)
+	logger.Info("Fixed photo path", zap.String("photo", string(p.ID)), zap.String("path", p.Path), zap.String("oldpath", oldPath))
+	return p, nil
+}
+
+func migrateHash(ctx context.Context, p Photo, in ReaderFunc) (Photo, error) {
+	if !p.HasHash() {
+		content, err := in()
+		if err != nil {
+			return p, err
+		}
+		defer content.Close()
+		h, err := ComputeHash(content)
+		if err != nil {
+			return p, err
+		}
+		p.Hash = h
+	}
+	return p, nil
+}
+
+func addOrientation(ctx context.Context, p Photo, in ReaderFunc) (Photo, error) {
+	if p.Orientation == domain.UnknownOrientation {
+		content, err := in()
+		if err != nil {
+			return p, err
+		}
+		defer content.Close()
+		var meta domain.MediaMetaData
+		if err := p.Format.DecodeMetaData(content, &meta); err != nil {
+			return p, err
+		}
+		p.Orientation = meta.Orientation
+	}
+	return p, nil
+}
+
+func instanceMigrations() InstanceMigrations {
+	migrations := NewInstanceMigrations()
+	migrations.Register(Version(1), InstanceFunc(migratePath))
+	migrations.Register(Version(1), InstanceFunc(migrateHash))
+	migrations.Register(Version(1), InstanceFunc(addOrientation))
+	return migrations
+}

@@ -13,7 +13,7 @@ import (
 const currentSchema = 1
 
 type Photo struct {
-	schema      uint
+	schema      Version
 	ID          PhotoID            `json:"id"`
 	Path        string             `json:"path"`
 	Size        int64              `json:"size,omitempty"`
@@ -34,7 +34,7 @@ func (p *Photo) HasHash() bool {
 
 func (p *Photo) MarshalJSON() ([]byte, error) {
 	out := struct {
-		Schema      uint               `json:"schema"`
+		Schema      Version               `json:"schema"`
 		ID          PhotoID            `json:"id"`
 		Path        string             `json:"path"`
 		Format      string             `json:"format"`
@@ -57,7 +57,7 @@ func (p *Photo) MarshalJSON() ([]byte, error) {
 func (p *Photo) UnmarshalJSON(buf []byte) error {
 	// TODO get rid of this, format should be marshallabled to string
 	var data struct {
-		Schema      uint               `json:"schema"`
+		Schema      Version               `json:"schema"`
 		Path        string             `json:"path"`
 		ID          PhotoID            `json:"id"`
 		Format      string             `json:"format"`

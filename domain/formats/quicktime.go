@@ -8,8 +8,6 @@ import (
 	"strconv"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	"bitbucket.org/kleinnic74/photos/domain/gps"
 )
 
@@ -111,16 +109,12 @@ func (qt *Quicktime) defineKey(i uint32, name string) {
 	qt.keys[i] = name
 }
 
-func (qt *Quicktime) setMetaDataAsString(key, value string) {
+func (qt *Quicktime) setMetaDataAsString(key, value string) error {
 	metaParser, found := metaDataParsers[key]
 	if found {
-		err := metaParser(qt, key, value)
-		if err != nil {
-			log.Warnf("Could not parse meta-data %s: %s", key, err)
-		}
-	} else {
-		log.Debugf("  Ignored meta-data %s=%s (no parser defined)", key, value)
+		return metaParser(qt, key, value)
 	}
+	return nil
 }
 
 func parseAtoms(qt *Quicktime, in io.Reader, parent AtomContainer) error {
@@ -146,7 +140,7 @@ func parseAtoms(qt *Quicktime, in io.Reader, parent AtomContainer) error {
 }
 
 func skip(in io.Reader, nb int64) error {
-	var total int64 = 0
+	var total int64
 	switch r := in.(type) {
 	case io.Seeker:
 		_, err := r.Seek(nb, io.SeekCurrent)
