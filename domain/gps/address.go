@@ -64,5 +64,5 @@ func (a *Address) UnmarshalJSON(data []byte) (err error) {
 }
 
 func asPlaceID(countryCode CountryID, city, zip string) PlaceID {
-	return PlaceID(strings.Join([]string{strings.ToLower(string(countryCode)), strings.ToLower(zip), strings.ToLower(city)}, "/"))
+	return PlaceID(strings.Join([]string{strings.ToLower(string(countryCode)), strings.ToLower(zip), strings.ToLower(city)}, "_"))
 }

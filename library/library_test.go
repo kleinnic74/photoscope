@@ -14,23 +14,24 @@ import (
 )
 
 func TestUnmarshalJSON(t *testing.T) {
-	data := []byte(`{
-		"path": "2018/02/03",
-		"id": "12345678",
-		"format": "jpg",
-		"gps": {
-		   "long": 47.123445,
-		   "lat": 45.12313
-		}
-	}`)
-	var p Photo
-	if err := json.Unmarshal(data, &p); err != nil {
-		t.Fatalf("Failed to Unmarshal JSON: %s", err)
+	data := []struct {
+		json    []byte
+		hasHash bool
+	}{
+		{[]byte(`{"path": "2018/02/03","id": "12345678","format": "jpg","gps": {"long": 47.123445,"lat": 45.12313}}`), false},
+		{[]byte(`{"path": "2018/02/03","id": "12345678","format": "jpg","gps": {"long": 47.123445,"lat": 45.12313},"hash":"1234"}`), true},
 	}
-	assertEquals(t, "format", "jpg", p.Format.ID())
-	assertEquals(t, "path", "2018/02/03", p.Path)
-	assertEquals(t, "id", "12345678", string(p.ID))
-	assertEquals(t, "gps.lat", "[45.123130;47.123445]", p.Location.String())
+	for _, d := range data {
+		var p Photo
+		if err := json.Unmarshal(d.json, &p); err != nil {
+			t.Fatalf("Failed to Unmarshal JSON: %s", err)
+		}
+		assertEquals(t, "format", "jpg", p.Format.ID())
+		assertEquals(t, "path", "2018/02/03", p.Path)
+		assertEquals(t, "id", "12345678", string(p.ID))
+		assertEquals(t, "gps.lat", "[45.123130;47.123445]", p.Location.String())
+		assert.Equal(t, d.hasHash, p.HasHash(), "Bad hash status")
+	}
 }
 
 func TestMarshallJSON(t *testing.T) {
@@ -45,9 +46,10 @@ func TestMarshallJSON(t *testing.T) {
 				Format:    domain.MustFormatForExt("jpg"),
 				Location:  gps.MustNewCoordinates(12, 34),
 				DateTaken: time.Now(),
+				Hash:      BinaryHash("1234"),
 			},
 			JSON: `{
-  "schema": 1,
+  "schema": 3,
   "id": "id",
   "path": "to/file",
   "format": "jpg",
@@ -56,7 +58,8 @@ func TestMarshallJSON(t *testing.T) {
   "gps": {
     "lat": 12,
     "long": 34
-  }
+  },
+  "hash": "1234"
 }`,
 		},
 	}

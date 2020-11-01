@@ -15,7 +15,7 @@ type MigratableInstances interface {
 }
 
 type MigratableStructure interface {
-	MigrateStructure(context.Context, library.Version) (library.Version, error)
+	MigrateStructure(ctx context.Context, from library.Version) (reached library.Version, reindex bool, err error)
 }
 
 type indexState struct {
@@ -48,6 +48,7 @@ func NewMigrationCoordinator(db *bolt.DB) (*MigrationCoordinator, error) {
 			if err := json.Unmarshal(v, &idx); err != nil {
 				return err
 			}
+			idx.Name = Name(k)
 			versions[Name(k)] = idx
 		}
 		return nil
@@ -65,14 +66,18 @@ func (c *MigrationCoordinator) AddInstances(i MigratableInstances) {
 	c.instances = append(c.instances, i)
 }
 
-func (c *MigrationCoordinator) Migrate(ctx context.Context) error {
+func (c *MigrationCoordinator) Migrate(ctx context.Context) ([]Name, error) {
+	var needReindexing []Name
 	logger, ctx := logging.SubFrom(ctx, "migrationCoordinator")
 	logger.Info("Migrating structures")
 	for name, s := range c.structures {
 		currentState := c.versions[name]
-		nextVersion, err := s.MigrateStructure(ctx, currentState.Version)
+		nextVersion, reindex, err := s.MigrateStructure(ctx, currentState.Version)
 		if err != nil {
 			logger.Warn("Migration failed", zap.Stringer("index", name), zap.Error(err))
+		}
+		if reindex {
+			needReindexing = append(needReindexing, name)
 		}
 		currentState.Version = nextVersion
 		if err := c.updateState(ctx, name, currentState); err != nil {
@@ -86,7 +91,7 @@ func (c *MigrationCoordinator) Migrate(ctx context.Context) error {
 			logger.Warn("Migration failed", zap.Error(err))
 		}
 	}
-	return nil
+	return needReindexing, nil
 }
 
 func (c *MigrationCoordinator) updateState(ctx context.Context, name Name, state indexState) error {
@@ -98,4 +103,42 @@ func (c *MigrationCoordinator) updateState(ctx context.Context, name Name, state
 		b := tx.Bucket(migratablesBucket)
 		return b.Put([]byte(name), encoded)
 	})
+}
+
+// StructuralMigration migrates the structure of the underlying datastore
+type StructuralMigration interface {
+	Apply() (bool, error)
+}
+
+type StructuralMigrationFunc func() (bool, error)
+
+func (m StructuralMigrationFunc) Apply() (bool, error) {
+	return m()
+}
+
+// ForceReindex is a structural migration doing nothing except forcing to reindex all instances
+var ForceReindex = StructuralMigrationFunc(func() (bool, error) { return true, nil })
+
+// StructucalMigrations are a collection of migrations to be applied to a given data store
+type StructuralMigrations map[library.Version][]StructuralMigration
+
+func NewStructuralMigrations() StructuralMigrations {
+	return make(StructuralMigrations)
+}
+
+func (migrations StructuralMigrations) Register(targetVersion library.Version, m StructuralMigration) {
+	migrations[targetVersion] = append(migrations[targetVersion], m)
+}
+
+func (migrations StructuralMigrations) Apply(current library.Version, target library.Version) (reindex bool, err error) {
+	for current < target {
+		for _, m := range migrations[current] {
+			reindex, err = m.Apply()
+			if err != nil {
+				return
+			}
+		}
+		current++
+	}
+	return
 }

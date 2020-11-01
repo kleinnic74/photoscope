@@ -123,18 +123,19 @@ func (t *wrappedTask) Execute(ctx context.Context, executor tasks.TaskExecutor, 
 }
 
 type findUnindexedTask struct {
-	indexer *Indexer
+	indexer      *Indexer
+	staleIndexes []Name
 }
 
 func (indexer *Indexer) RegisterTasks(repo *tasks.TaskRepository) {
-	repo.RegisterWithProperties("findUnindexed", indexer.newFindUnindexedTask, tasks.TaskProperties{
-		RunOnStart:   true,
-		UserRunnable: false,
-	})
+	// repo.RegisterWithProperties("findUnindexed", indexer.newFindUnindexedTask, tasks.TaskProperties{
+	// 	RunOnStart:   true,
+	// 	UserRunnable: false,
+	// })
 }
 
-func (indexer *Indexer) newFindUnindexedTask() tasks.Task {
-	return findUnindexedTask{indexer}
+func (indexer *Indexer) NewFindUnindexedTask(staleIndexes []Name) tasks.Task {
+	return findUnindexedTask{indexer, staleIndexes}
 }
 
 func (t findUnindexedTask) Describe() string {
@@ -154,9 +155,16 @@ func (t findUnindexedTask) Execute(ctx context.Context, executor tasks.TaskExecu
 			logger.Warn("Could not retrieve missing indexes", zap.Error(err))
 			continue
 		}
+		// Also add the stale indexes
+		missing = append(missing, t.staleIndexes...)
+		indexes := make(map[Name]bool)
 		for _, i := range missing {
+			if indexes[i] {
+				continue
+			}
 			t.indexer.indexDeferred(ctx, p, i)
 			logger.Info("Indexing needed", zap.String("photo", string(p.ID)), zap.String("index", string(i)))
+			indexes[i] = true
 		}
 		if len(missing) > 0 {
 			count++

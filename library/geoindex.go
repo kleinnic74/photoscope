@@ -16,7 +16,7 @@ type CountryAndPlaces struct {
 }
 
 type GeoIndex interface {
-	MigrateStructure(context.Context, Version) (Version, error)
+	MigrateStructure(context.Context, Version) (Version, bool, error)
 
 	Has(context.Context, PhotoID) bool
 	Get(context.Context, PhotoID) (*gps.Address, bool, error)

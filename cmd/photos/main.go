@@ -114,8 +114,6 @@ func main() {
 		logger.Fatal("Failed to initialize dataindex", zap.Error(err))
 	}
 
-	RegisterMigrationTask(taskRepo, migrator)
-
 	executor := tasks.NewSerialTaskExecutor(lib)
 	executorContext, cancelExecutor := context.WithCancel(ctx)
 	go executor.DrainTasks(executorContext)
@@ -125,6 +123,8 @@ func main() {
 	indexer.RegisterDefered("geo", boltstore.GeoIndexVersion, geocoder.LookupPhotoOnAdd)
 
 	indexer.RegisterTasks(taskRepo)
+
+	RegisterMigrationTask(taskRepo, migrator, indexer)
 
 	lib.AddCallback(indexer.Add)
 

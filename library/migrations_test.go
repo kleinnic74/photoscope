@@ -23,7 +23,7 @@ func TestMigrations(t *testing.T) {
 		{src: Photo{schema: 0, Orientation: 0},
 			dst: Photo{schema: currentSchema, Orientation: 1, Hash: "E5d6oXltiEgafGIYfZLv7g=="}, expectChange: true},
 		{src: Photo{schema: 1, Orientation: 0, Hash: "E5d6oXltiEgafGIYfZLv7g=="},
-			dst: Photo{schema: currentSchema, Orientation: 0, Hash: "E5d6oXltiEgafGIYfZLv7g=="}, expectChange: false},
+			dst: Photo{schema: currentSchema, Orientation: 0, Hash: "E5d6oXltiEgafGIYfZLv7g=="}, expectChange: true},
 	}
 	for i, d := range data {
 		ctx := context.Background()

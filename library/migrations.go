@@ -30,7 +30,7 @@ func (migrations InstanceMigrations) Register(toTargetSchema Version, m Instance
 func (migrations InstanceMigrations) Apply(ctx context.Context, photo Photo, content ReaderFunc) (result Photo, err error) {
 	result = photo
 	for result.schema < currentSchema {
-		nextSchema := photo.schema + 1
+		nextSchema := result.schema + 1
 		m := migrations[nextSchema]
 		for _, migration := range m {
 			result, err = migration.Apply(ctx, result, content)
@@ -41,36 +41,4 @@ func (migrations InstanceMigrations) Apply(ctx context.Context, photo Photo, con
 		result.schema = nextSchema
 	}
 	return
-}
-
-type StructuralMigration interface {
-	Apply() error
-}
-
-type StructuralMigrationFunc func() error
-
-func (m StructuralMigrationFunc) Apply() error {
-	return m()
-}
-
-type StructuralMigrations map[Version][]StructuralMigration
-
-func NewStructuralMigrations() StructuralMigrations {
-	return make(StructuralMigrations)
-}
-
-func (migrations StructuralMigrations) Register(targetVersion Version, m StructuralMigration) {
-	migrations[targetVersion] = append(migrations[targetVersion], m)
-}
-
-func (migrations StructuralMigrations) Apply(current Version, target Version) error {
-	for current < target {
-		for _, m := range migrations[current] {
-			if err := m.Apply(); err != nil {
-				return err
-			}
-		}
-		current++
-	}
-	return nil
 }

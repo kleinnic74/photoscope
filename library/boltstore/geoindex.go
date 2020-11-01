@@ -7,13 +7,14 @@ import (
 	"fmt"
 
 	"bitbucket.org/kleinnic74/photos/domain/gps"
+	"bitbucket.org/kleinnic74/photos/index"
 	"bitbucket.org/kleinnic74/photos/library"
 	"bitbucket.org/kleinnic74/photos/logging"
 	"github.com/boltdb/bolt"
 	"go.uber.org/zap"
 )
 
-const GeoIndexVersion = library.Version(3)
+const GeoIndexVersion = library.Version(4)
 
 type boltGeoIndex struct {
 	db *bolt.DB
@@ -52,14 +53,16 @@ func NewBoltGeoIndex(db *bolt.DB) (library.GeoIndex, error) {
 	}, nil
 }
 
-func (idx *boltGeoIndex) MigrateStructure(ctx context.Context, from library.Version) (library.Version, error) {
-	migrations := library.NewStructuralMigrations()
-	migrations.Register(library.Version(3), library.StructuralMigrationFunc(idx.deleteLegacyBuckets))
-	return GeoIndexVersion, migrations.Apply(from, GeoIndexVersion)
+func (idx *boltGeoIndex) MigrateStructure(ctx context.Context, from library.Version) (library.Version, bool, error) {
+	migrations := index.NewStructuralMigrations()
+	migrations.Register(library.Version(3), index.StructuralMigrationFunc(idx.deleteLegacyBuckets))
+	migrations.Register(library.Version(4), index.ForceReindex)
+	reindex, err := migrations.Apply(from, GeoIndexVersion)
+	return GeoIndexVersion, reindex, err
 }
 
-func (idx *boltGeoIndex) deleteLegacyBuckets() error {
-	return deleteBuckets(idx.db, "photoplaces", "photosByPlace", "allcountries", "placesByCountry")
+func (idx *boltGeoIndex) deleteLegacyBuckets() (bool, error) {
+	return true, deleteBuckets(idx.db, "photoplaces", "photosByPlace", "allcountries", "placesByCountry")
 }
 
 func (idx *boltGeoIndex) Has(ctx context.Context, id library.PhotoID) (exists bool) {

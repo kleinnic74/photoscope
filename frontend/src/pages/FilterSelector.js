@@ -26,9 +26,17 @@ export default class FilterSelector extends Component {
         this.onDaySelected = this.onDaySelected.bind(this)
         this.onFilterChange = this.onFilterChange.bind(this)
         this.onPlaceSelected = this.onPlaceSelected.bind(this)
+
+        this.refreshTimeline = this.refreshTimeline.bind(this)
+        this.refreshPlaces = this.refreshPlaces.bind(this)
     }
 
     componentDidMount() {
+        this.refreshTimeline()
+        this.refreshPlaces()
+    }
+
+    refreshTimeline() {
         axios.get(this.props.baseURL + '/timeline/index')
             .then(response => response.data)
             .then(data => {
@@ -36,6 +44,9 @@ export default class FilterSelector extends Component {
                 this.setState({ timeline: data })
             })
             .catch(error => console.log(error))
+    }
+
+    refreshPlaces() {
         axios.get(this.props.baseURL + '/geo/index')
             .then(response => response.data)
             .then(data => {
@@ -51,15 +62,20 @@ export default class FilterSelector extends Component {
     }
 
     onPlaceSelected(placeID) {
-        if (placeID.includes('-') > 0) {
-            this.props.onFilterChanged('/geo/photos/'+placeID.replace('-', '/'))
-        } else {
-            this.props.onFilterChanged('/geo/photos/'+placeID)
-        }
+        this.props.onFilterChanged('/geo/photos/byplace/' + placeID)
     }
 
     onFilterChange(tab) {
         console.log("Filter tab changed", tab)
+        switch (tab) {
+            case 'Places':
+                this.refreshPlaces()
+                break
+            case 'Timeline':
+                this.refreshTimeline()
+            default:
+                break
+        }
     }
 
     render() {

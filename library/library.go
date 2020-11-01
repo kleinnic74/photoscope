@@ -378,7 +378,7 @@ func addOrientation(ctx context.Context, p Photo, in ReaderFunc) (Photo, error) 
 func instanceMigrations() InstanceMigrations {
 	migrations := NewInstanceMigrations()
 	migrations.Register(Version(1), InstanceFunc(migratePath))
-	migrations.Register(Version(1), InstanceFunc(migrateHash))
 	migrations.Register(Version(1), InstanceFunc(addOrientation))
+	migrations.Register(Version(3), InstanceFunc(migrateHash))
 	return migrations
 }

@@ -47,13 +47,12 @@ class Country extends Component {
         const {
             props: {
                 country: {
-                    ciso,
                     country,
                     places }
             }
         } = this
         const leaves = places.map((p,i) => {
-            return (<Leaf key={i} label={p.city || p.zip} id={ciso+"-"+p.zip} onClick={this.clickHandler}/>)
+            return (<Leaf key={i} label={p.city || p.zip} id={p.id} onClick={this.clickHandler}/>)
         })
         return (
             <li>{country}

@@ -10,7 +10,7 @@ import (
 	"bitbucket.org/kleinnic74/photos/domain/gps"
 )
 
-const currentSchema = 1
+const currentSchema = 3
 
 type Photo struct {
 	schema      Version
@@ -34,7 +34,7 @@ func (p *Photo) HasHash() bool {
 
 func (p *Photo) MarshalJSON() ([]byte, error) {
 	out := struct {
-		Schema      Version               `json:"schema"`
+		Schema      Version            `json:"schema"`
 		ID          PhotoID            `json:"id"`
 		Path        string             `json:"path"`
 		Format      string             `json:"format"`
@@ -42,6 +42,7 @@ func (p *Photo) MarshalJSON() ([]byte, error) {
 		DateTaken   int64              `json:"dateUN"`
 		Location    *gps.Coordinates   `json:"gps"`
 		Orientation domain.Orientation `json:"or,omitempty"`
+		Hash        BinaryHash         `json:"hash,omitempty"`
 	}{
 		Schema:      currentSchema,
 		ID:          p.ID,
@@ -50,6 +51,7 @@ func (p *Photo) MarshalJSON() ([]byte, error) {
 		DateTaken:   p.DateTaken.UnixNano(),
 		Location:    p.Location,
 		Orientation: p.Orientation,
+		Hash:        p.Hash,
 	}
 	return json.Marshal(&out)
 }
@@ -57,7 +59,7 @@ func (p *Photo) MarshalJSON() ([]byte, error) {
 func (p *Photo) UnmarshalJSON(buf []byte) error {
 	// TODO get rid of this, format should be marshallabled to string
 	var data struct {
-		Schema      Version               `json:"schema"`
+		Schema      Version            `json:"schema"`
 		Path        string             `json:"path"`
 		ID          PhotoID            `json:"id"`
 		Format      string             `json:"format"`
@@ -65,6 +67,7 @@ func (p *Photo) UnmarshalJSON(buf []byte) error {
 		DateTaken   int64              `json:"dateUN"`
 		Location    *gps.Coordinates   `json:"gps"`
 		Orientation domain.Orientation `json:"or,omitempty"`
+		Hash        BinaryHash         `json:"hash,omitempty"`
 	}
 	err := json.Unmarshal(buf, &data)
 	if err != nil {
@@ -78,6 +81,7 @@ func (p *Photo) UnmarshalJSON(buf []byte) error {
 	}
 	p.Location = data.Location
 	p.Orientation = data.Orientation
+	p.Hash = data.Hash
 	p.schema = data.Schema
 	return nil
 }
