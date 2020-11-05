@@ -66,6 +66,21 @@ func (c *MigrationCoordinator) AddInstances(i MigratableInstances) {
 	c.instances = append(c.instances, i)
 }
 
+func (c *MigrationCoordinator) GetIndexes() (names []Name) {
+	for k := range c.versions {
+		names = append(names, k)
+	}
+	return
+}
+
+func (c *MigrationCoordinator) GetIndexStatus(name Name) (IndexStatus, bool) {
+	state, found := c.versions[name]
+	if !found {
+		return IndexStatus{}, false
+	}
+	return IndexStatus{Version: state.Version}, true
+}
+
 func (c *MigrationCoordinator) Migrate(ctx context.Context) ([]Name, error) {
 	var needReindexing []Name
 	logger, ctx := logging.SubFrom(ctx, "migrationCoordinator")

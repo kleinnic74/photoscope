@@ -36,19 +36,18 @@ func (w *responseWrapper) WriteHeader(status int) {
 func logRequest(f http.Handler, name string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		log := logging.From(r.Context())
 		rid := r.Context().Value(requestIDKey).(string)
-		ctx := logging.Context(r.Context(), log.With(zap.String("request", rid)))
+		_, ctx := logging.FromWithNameAndFields(r.Context(), "http", zap.String("corrID", rid))
+		r = r.WithContext(ctx)
 		wrapper := responseWrapper{
 			writer: w,
 		}
 		defer func() {
 			log := logging.From(r.Context()).Named(name)
-			log.Debug("HTTP Request",
+			log.Info("HTTP Request",
 				zap.String("method", r.Method),
 				zap.String("path", r.URL.Path),
 				zap.Duration("duration", time.Since(start)),
-				zap.String("request", rid),
 				zap.Int("status", wrapper.status))
 		}()
 		f.ServeHTTP(&wrapper, r.WithContext(ctx))

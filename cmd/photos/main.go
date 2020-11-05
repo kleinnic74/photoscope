@@ -145,6 +145,9 @@ func main() {
 	tasksApp := rest.NewTaskHandler(taskRepo, executor)
 	tasksApp.InitRoutes(router)
 
+	indexesRest := rest.NewIndexes(migrator)
+	indexesRest.Init(router)
+
 	tmpdir := filepath.Join(libDir, "tmp")
 	wdav, err := wdav.NewWebDavHandler(tmpdir, backgroundImport(executor))
 	if err != nil {
