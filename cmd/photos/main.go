@@ -20,6 +20,7 @@ import (
 	"bitbucket.org/kleinnic74/photos/consts"
 	"bitbucket.org/kleinnic74/photos/domain"
 	"bitbucket.org/kleinnic74/photos/geocoding"
+	"bitbucket.org/kleinnic74/photos/geocoding/openstreetmap"
 	"bitbucket.org/kleinnic74/photos/importer"
 	"bitbucket.org/kleinnic74/photos/index"
 	"bitbucket.org/kleinnic74/photos/library"
@@ -106,7 +107,7 @@ func main() {
 	}
 	migrator.AddStructure("geo", geoindex)
 
-	geocoder := geocoding.NewGeocoder(geoindex)
+	geocoder := geocoding.NewGeocoder(geoindex, openstreetmap.NewResolver("de,en"))
 	geocoder.RegisterTasks(taskRepo)
 
 	dateindex, err := boltstore.NewDateIndex(db)

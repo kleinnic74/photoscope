@@ -35,7 +35,8 @@ type AddressFields struct {
 // Address is the address view of a geographical location
 type Address struct {
 	AddressFields
-	ID PlaceID `json:"id"`
+	ID          PlaceID `json:"id"`
+	BoundingBox *Rect   `json:"boundingbox"`
 }
 
 func AsAddress(country, iso, city, zip string) Address {

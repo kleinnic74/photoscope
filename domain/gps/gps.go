@@ -15,28 +15,32 @@ type Coordinates struct {
 }
 
 const (
-	latMin  = float64(-90.)
-	latMax  = float64(90.)
-	longMin = float64(-180.)
-	longMax = float64(180.)
+	LatMin = float64(-90.)
+	LatMax = float64(90.)
+	LonMin = float64(-180.)
+	LonMax = float64(180.)
+)
+
+var (
+	WorldBounds = Rect{LonMin, LatMin, LonMax, LatMax}
 )
 
 func NewCoordinates(lat, lon float64) (*Coordinates, error) {
-	if lat < latMin || lat > latMax || lon < longMin || lon > longMax {
+	if lat < LatMin || lat > LatMax || lon < LonMin || lon > LonMax {
 		return nil, InvalidGPSCoordinates
 	}
 	return &Coordinates{Lat: lat, Long: lon}, nil
 }
 
 func MustNewCoordinates(lat, lon float64) *Coordinates {
-	if lat < latMin || lat > latMax || lon < longMin || lon > longMax {
+	if lat < LatMin || lat > LatMax || lon < LonMin || lon > LonMax {
 		panic(fmt.Sprintf("Invalid GPS coordinates [%f;%f]", lat, lon))
 	}
 	return &Coordinates{lat, lon}
 }
 
 func (c Coordinates) IsValid() bool {
-	return c.Lat >= latMin && c.Lat <= latMax && c.Long >= longMin && c.Long <= longMax
+	return c.Lat >= LatMin && c.Lat <= LatMax && c.Long >= LonMin && c.Long <= LonMax
 }
 
 func (c Coordinates) String() string {

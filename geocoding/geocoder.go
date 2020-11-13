@@ -8,22 +8,24 @@ import (
 	"bitbucket.org/kleinnic74/photos/library"
 	"bitbucket.org/kleinnic74/photos/logging"
 	"bitbucket.org/kleinnic74/photos/tasks"
-	"github.com/codingsince1985/geo-golang"
-	"github.com/codingsince1985/geo-golang/openstreetmap"
 	"go.uber.org/zap"
 )
 
 var UnknownLocation = errors.New("Unknown GPS location")
 
-type Geocoder struct {
-	index    library.GeoIndex
-	resolver geo.Geocoder
+type Resolver interface {
+	ReverseGeocode(ctx context.Context, lat, long float64) (*gps.Address, bool, error)
 }
 
-func NewGeocoder(idx library.GeoIndex) *Geocoder {
+type Geocoder struct {
+	index    library.GeoIndex
+	resolver Resolver
+}
+
+func NewGeocoder(idx library.GeoIndex, resolver Resolver) *Geocoder {
 	return &Geocoder{
 		index:    idx,
-		resolver: openstreetmap.Geocoder(),
+		resolver: resolver,
 	}
 }
 
@@ -33,16 +35,15 @@ func (g *Geocoder) RegisterTasks(repo *tasks.TaskRepository) {
 	})
 }
 
-func (g *Geocoder) ReverseGeocode(lat, lon float64) (*gps.Address, error) {
-	address, err := g.resolver.ReverseGeocode(lat, lon)
+func (g *Geocoder) ReverseGeocode(ctx context.Context, lat, lon float64) (*gps.Address, error) {
+	address, found, err := g.resolver.ReverseGeocode(ctx, lat, lon)
 	if err != nil {
 		return nil, err
 	}
-	if address == nil {
+	if !found {
 		return nil, UnknownLocation
 	}
-	gpsAddess := toAddress(*address)
-	return &gpsAddess, nil
+	return address, nil
 }
 
 func (g *Geocoder) LookupPhotoOnAdd(ctx context.Context, p *library.Photo) (tasks.Task, bool) {
@@ -55,7 +56,7 @@ func (g *Geocoder) LookupPhotoOnAdd(ctx context.Context, p *library.Photo) (task
 func (g *Geocoder) ResolveAndStoreLocation(ctx context.Context, p library.PhotoID, coords gps.Coordinates) error {
 	logger, ctx := logging.FromWithNameAndFields(ctx, "geocoder", zap.String("photo", string(p)))
 	logger.Info("Reverse geocoding", zap.Stringer("location", coords))
-	address, err := g.ReverseGeocode(coords.Lat, coords.Long)
+	address, err := g.ReverseGeocode(ctx, coords.Lat, coords.Long)
 	if err != nil {
 		return err
 	}

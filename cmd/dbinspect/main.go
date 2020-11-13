@@ -56,6 +56,7 @@ func init() {
 	flag.BoolVar(&printKey, "k", false, "Output keys")
 	flag.BoolVar(&printValue, "v", false, "Output value")
 	flag.BoolVar(&deleteEntry, "d", false, "Delete entry")
+
 	var keyFilter string
 	flag.StringVar(&keyFilter, "kf", "", "Key regex filter")
 
@@ -68,6 +69,7 @@ func init() {
 		flag.Usage()
 		os.Exit(1)
 	}
+	fmt.Fprintf(os.Stderr, "executing: %s\n", exe.name)
 
 	if keyFilter != "" {
 		keyRE, err := regexp.Compile(keyFilter)
@@ -94,30 +96,55 @@ func listBuckets(tx *bolt.Tx) error {
 	})
 }
 
+type stats struct {
+	count      int
+	badKeys    int
+	zeroValues int
+}
+
+func (s stats) Add(sub stats) (out stats) {
+	out.badKeys = s.badKeys + sub.badKeys
+	out.count = s.count + sub.count
+	out.zeroValues = s.zeroValues + sub.zeroValues
+	return
+}
+
 func listEntries(tx *bolt.Tx) error {
 	b := tx.Bucket([]byte(bucket))
 	if b == nil {
 		return fmt.Errorf("No such bucket: %s", bucket)
 	}
-	sep, end := "", ""
-	var count int
-	var badKeys int
-	var zeroValues int
+	var s stats
 	defer func() {
-		fmt.Printf("  %d entries\n", count)
-		fmt.Printf("  %d bad keys\n", badKeys)
-		fmt.Printf("  %d zero values\n", zeroValues)
+		fmt.Printf("  %d entries\n", s.count)
+		fmt.Printf("  %d bad keys\n", s.badKeys)
+		fmt.Printf("  %d zero values\n", s.zeroValues)
 	}()
-	return b.ForEach(func(k, v []byte) error {
+	subStats, err := walkBucket(tx, b)
+	s = s.Add(subStats)
+	return err
+}
+
+func walkBucket(tx *bolt.Tx, b *bolt.Bucket) (s stats, err error) {
+	sep, end := "", ""
+	err = b.ForEach(func(k, v []byte) error {
 		if !keyAcceptor(string(k)) {
 			return nil
 		}
-		count++
+		if v == nil {
+			// This is a bucket
+			subStats, err := walkBucket(tx, b.Bucket(k))
+			if err != nil {
+				return err
+			}
+			s = s.Add(subStats)
+		}
+		s.count++
 		if len(k) == 0 {
-			badKeys++
+			s.badKeys++
 		}
 		if len(v) == 0 {
-			zeroValues++
+			s.zeroValues++
 		}
 		if printKey {
 			fmt.Fprintf(os.Stdout, "%s", string(k))
@@ -131,6 +158,7 @@ func listEntries(tx *bolt.Tx) error {
 		fmt.Fprintf(os.Stdout, "%s", end)
 		return nil
 	})
+	return
 }
 
 func deleteEntries(tx *bolt.Tx) error {
