@@ -44,3 +44,29 @@ func (t geoLookupTask) Describe() string {
 func (t geoLookupTask) Execute(ctx context.Context, executor tasks.TaskExecutor, lib library.PhotoLibrary) error {
 	return t.geocoder.ResolveAndStoreLocation(ctx, t.PhotoID, t.Coords)
 }
+
+type loadKnownPlaces struct {
+	index library.GeoIndex
+	cache *cache
+}
+
+func newLoadKnownPlaces(index library.GeoIndex, cache *cache) tasks.Task {
+	return loadKnownPlaces{index, cache}
+}
+
+func (t loadKnownPlaces) Describe() string {
+	return "Prepare geo resolution services"
+}
+
+func (t loadKnownPlaces) Execute(ctx context.Context, executor tasks.TaskExecutor, lib library.PhotoLibrary) error {
+	countriesAndPlaces, err := t.index.Locations(ctx)
+	if err != nil {
+		return err
+	}
+	for _, c := range countriesAndPlaces.Countries {
+		for _, p := range c.Places {
+			t.cache.Add(*p)
+		}
+	}
+	return nil
+}

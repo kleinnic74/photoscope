@@ -64,6 +64,10 @@ func (a *Address) UnmarshalJSON(data []byte) (err error) {
 	return
 }
 
+func (a *Address) HasValidBoundingBox() bool {
+	return a.BoundingBox != nil && a.BoundingBox.W() > 0 && a.BoundingBox.H() > 0
+}
+
 func asPlaceID(countryCode CountryID, city, zip string) PlaceID {
 	return PlaceID(strings.Join([]string{strings.ToLower(string(countryCode)), strings.ToLower(zip), strings.ToLower(city)}, "_"))
 }

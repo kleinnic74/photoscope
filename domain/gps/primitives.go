@@ -1,6 +1,9 @@
 package gps
 
-import "math"
+import (
+	"fmt"
+	"math"
+)
 
 type Rect [4]float64
 
@@ -76,4 +79,12 @@ func (p Point) Lon() float64 {
 
 func (p Point) In(r Rect) bool {
 	return p[0] >= r[0] && p[0] < r[2] && p[1] >= r[1] && p[1] < r[3]
+}
+
+func (p Point) String() string {
+	return fmt.Sprintf("%f;%f", p[0], p[1])
+}
+
+func (p Point) ISO6709() string {
+	return fmt.Sprintf("%+010.6f%+011.6f/", p[1], p[0])
 }

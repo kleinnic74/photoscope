@@ -33,6 +33,7 @@ func TestUnmarshalResponse(t *testing.T) {
 	}
 	assert.Equal(t, latlon(48.2118494), l.Lat, "Bad value for lattitude")
 	assert.Equal(t, latlon(16.3651666), l.Long, "Bad value for longitude")
+	assert.Equal(t, "1010", l.Address.Zip)
 	assert.NotNil(t, l.BoundingBox)
 	pos := l.Pos()
 	assert.True(t, pos.In(gps.Rect(*l.BoundingBox)))
@@ -49,4 +50,6 @@ func TestReverseGeocode(t *testing.T) {
 		t.Errorf("Bad result, found was %t, expected %t", found, true)
 	}
 	t.Logf("Resolved: %v", address)
+	assert.NotEmpty(t, address.ID)
+	assert.Equal(t, "B72", address.Zip)
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -22,6 +23,14 @@ var IllegalBoundingBox = errors.New("Not a valid bounding box")
 const (
 	baseURL   = "https://nominatim.openstreetmap.org/"
 	userAgent = "GOPhotos/0.1"
+)
+
+var (
+	additionalParams = [][]string{
+		{"zoom", "16"},
+		{"addressdetails", "1"},
+		{"format", "json"},
+	}
 )
 
 type resolver struct {
@@ -106,15 +115,22 @@ func NewResolver(lang ...string) geocoding.Resolver {
 	}
 }
 
-func (osm *resolver) ReverseGeocode(ctx context.Context, lat, long float64) (*gps.Address, bool, error) {
+func (osm *resolver) ReverseGeocode(ctx context.Context, lat, lon float64) (*gps.Address, bool, error) {
 	logger, ctx := logging.SubFrom(ctx, "openstreetmap")
-	url := fmt.Sprintf("%s/reverse?format=json&lat=%f&lon=%f&addressdetails=1&zoom=14", baseURL, lat, long)
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	query := make(url.Values)
+	for _, param := range additionalParams {
+		query.Add(param[0], param[1])
+	}
+	query.Add("lat", strconv.FormatFloat(lat, 'f', -1, 64))
+	query.Add("lon", strconv.FormatFloat(lon, 'f', -1, 64))
+	url := fmt.Sprintf("%s/reverse?%s", baseURL, query.Encode())
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, false, err
 	}
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Accept-Language", osm.lang)
+	logger.Debug("GET", zap.String("url", req.URL.String()))
 	res, err := osm.client.Do(req)
 	if err != nil {
 		return nil, false, err
@@ -129,15 +145,7 @@ func (osm *resolver) ReverseGeocode(ctx context.Context, lat, long float64) (*gp
 	if err := json.Unmarshal(data, &location); err != nil {
 		return nil, false, err
 	}
-	return &gps.Address{
-		AddressFields: gps.AddressFields{
-			Country: gps.Country{
-				Country: location.Address.Country,
-				ID:      gps.CountryID(location.Address.CountryISO),
-			},
-			City: location.Address.City,
-			Zip:  location.Address.Zip,
-		},
-		BoundingBox: location.BoundingBox.Rect(),
-	}, true, nil
+	address := gps.AsAddress(location.Address.Country, location.Address.CountryISO, location.Address.City, location.Address.Zip)
+	address.BoundingBox = location.BoundingBox.Rect()
+	return &address, true, nil
 }
