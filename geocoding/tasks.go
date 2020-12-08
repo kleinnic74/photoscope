@@ -9,11 +9,8 @@ import (
 	"bitbucket.org/kleinnic74/photos/logging"
 	"bitbucket.org/kleinnic74/photos/tasks"
 	"go.uber.org/zap"
-
-	"github.com/codingsince1985/geo-golang/openstreetmap"
 )
 
-var resolver = openstreetmap.Geocoder()
 
 func RegisterTasks(repo *tasks.TaskRepository, geocoder *Geocoder) {
 	repo.Register("geoResolve", func() tasks.Task {

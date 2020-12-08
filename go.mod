@@ -5,7 +5,6 @@ go 1.13
 require (
 	github.com/ajstarks/svgo v0.0.0-20200725142600-7a3c8b57fecb
 	github.com/boltdb/bolt v1.3.1
-	github.com/codingsince1985/geo-golang v1.6.1
 	github.com/disintegration/gift v1.2.1
 	github.com/google/uuid v1.1.1
 	github.com/gorilla/mux v1.7.4

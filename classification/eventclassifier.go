@@ -1,4 +1,4 @@
-package main
+package classification
 
 import (
 	"image"
@@ -8,7 +8,6 @@ import (
 
 	"image/color"
 
-	"bitbucket.org/kleinnic74/photos/classification"
 	"bitbucket.org/kleinnic74/photos/domain"
 )
 
@@ -16,11 +15,9 @@ type EventClassifier struct {
 	timestampedPhotos []classification.Timestamped
 }
 
-type TimestampedPhoto struct {
-	domain.Photo
-}
+type TimestampedPhoto *domain.Photo
 
-func (p *TimestampedPhoto) Timestamp() time.Time {
+func (p TimestampedPhoto) Timestamp() time.Time {
 	return p.DateTaken()
 }
 
@@ -31,7 +28,7 @@ func NewEventClassifier() *EventClassifier {
 }
 
 func (c *EventClassifier) Add(p domain.Photo) {
-	tp := &TimestampedPhoto{p}
+	tp := TimestampedPhoto(&p)
 	c.timestampedPhotos = append(c.timestampedPhotos, tp)
 }
 
