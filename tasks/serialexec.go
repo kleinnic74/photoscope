@@ -45,7 +45,7 @@ func (t *serialTaskExecutor) Submit(ctx context.Context, task Task) (Execution, 
 	return <-ch, nil
 }
 
-func (t *serialTaskExecutor) DrainTasks(ctx context.Context) {
+func (t *serialTaskExecutor) DrainTasks(ctx context.Context, completed CompletionFunc) {
 	logger := logging.From(ctx).Named("TaskExecutor")
 	queue := make(map[TaskID]Execution)
 	t.submitCh = make(chan taskSubmission)
@@ -91,7 +91,7 @@ func (t *serialTaskExecutor) DrainTasks(ctx context.Context) {
 		case s := <-t.submitCh:
 			id := t.ids
 			t.ids = t.ids + 1
-			logger.Info("Task submitted", zap.Any("task", s.task), zap.Uint64("taskID", uint64(id)))
+			logger.Info("Task submitted", zap.String("task", s.task.Describe()), zap.Uint64("taskID", uint64(id)))
 			e := Execution{ID: id, Status: Pending, Submitted: s.submitted, task: s.task, Title: s.task.Describe()}
 			select {
 			case taskCh <- e:
@@ -104,10 +104,11 @@ func (t *serialTaskExecutor) DrainTasks(ctx context.Context) {
 			s.exec <- e
 			close(s.exec)
 		case res := <-resCh:
-			logger.Info("Task completed", zap.Any("task", res.task),
+			logger.Info("Task completed", zap.String("task", res.task.Describe()),
 				zap.Uint64("taskID", uint64(res.ID)),
 				zap.String("taskStatus", string(res.Status)),
 				zap.Error(res.Error))
+			completed(res)
 			delete(queue, res.ID)
 			if len(pending) > 0 {
 				e := pending[0]

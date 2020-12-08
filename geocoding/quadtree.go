@@ -32,8 +32,10 @@ type node struct {
 }
 
 type Visitor interface {
+	Begin(bounds gps.Rect)
 	Level(depth int, bounds gps.Rect)
 	Object(bounds gps.Rect)
+	End()
 }
 
 func NewQuadTree(bounds gps.Rect) *quadtree {
@@ -66,7 +68,9 @@ func (qt *quadtree) Find(p gps.Point) (result []interface{}) {
 }
 
 func (qt *quadtree) Visit(v Visitor) {
+	v.Begin(qt.root.bounds)
 	qt.root.visit(v)
+	v.End()
 }
 
 func (qt *quadtree) FindFunc(p gps.Point, f ResultFunc) {

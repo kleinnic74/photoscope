@@ -23,27 +23,34 @@ var (
 
 	exe command
 
-	printKey    bool
-	printValue  bool
-	deleteEntry bool
+	printKey   bool
+	printValue bool
+	keyFilter  string
 
 	commands = []command{
-		{"buckets", listBuckets, true},
-		{"entries", listEntries, true},
-		{"delete", deleteEntries, false},
+		{"buckets", listBuckets, func() *flag.FlagSet { return nil }, true},
+		{"entries", listEntries, func() *flag.FlagSet {
+			cmdEntries := flag.NewFlagSet("entries", flag.ExitOnError)
+			cmdEntries.StringVar(&bucket, "b", "photos", "Bucket to inspect")
+			cmdEntries.BoolVar(&printKey, "k", false, "Output keys")
+			cmdEntries.BoolVar(&printValue, "v", false, "Output value")
+			cmdEntries.StringVar(&keyFilter, "kf", "", "Key regex filter")
+			return cmdEntries
+		}, true},
+		{"delete", deleteEntries, func() *flag.FlagSet { return nil }, false},
 	}
 )
 
-func getCommand(args []string) (command, error) {
+func getCommand(args []string) (command, *flag.FlagSet, error) {
 	if len(args) == 0 {
-		return commands[0], nil
+		return commands[0], commands[0].flags(), nil
 	}
 	for i := range commands {
 		if args[0] == commands[i].name {
-			return commands[i], nil
+			return commands[i], commands[i].flags(), nil
 		}
 	}
-	return command{}, fmt.Errorf("No such command: %s", args[0])
+	return command{}, nil, fmt.Errorf("No such command: %s", args[0])
 }
 
 func init() {
@@ -52,40 +59,31 @@ func init() {
 		flag.PrintDefaults()
 	}
 	flag.StringVar(&libDir, "l", "gophotos", "Path to photo library")
-	flag.StringVar(&bucket, "b", "photos", "Bucket to inspect")
-	flag.BoolVar(&printKey, "k", false, "Output keys")
-	flag.BoolVar(&printValue, "v", false, "Output value")
-	flag.BoolVar(&deleteEntry, "d", false, "Delete entry")
-
-	var keyFilter string
-	flag.StringVar(&keyFilter, "kf", "", "Key regex filter")
 
 	flag.Parse()
 
 	var err error
-	exe, err = getCommand(flag.Args())
+	var flags *flag.FlagSet
+	exe, flags, err = getCommand(flag.Args())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
 		flag.Usage()
 		os.Exit(1)
 	}
-	fmt.Fprintf(os.Stderr, "executing: %s\n", exe.name)
-
-	if keyFilter != "" {
-		keyRE, err := regexp.Compile(keyFilter)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Bad key filter RE: %s\n", err)
-			os.Exit(2)
-		}
-		keyAcceptor = keyRE.MatchString
+	args := flag.Args()[1:]
+	fmt.Fprintf(os.Stderr, "executing: %s [args=%s] [exe=%v]\n", exe.name, args, exe)
+	if flags != nil {
+		flags.Parse(args)
 	}
 }
 
 type cmdFunc func(*bolt.Tx) error
 
+type flagSetFunc func() *flag.FlagSet
 type command struct {
 	name     string
 	run      cmdFunc
+	flags    flagSetFunc
 	readonly bool
 }
 
@@ -110,6 +108,15 @@ func (s stats) Add(sub stats) (out stats) {
 }
 
 func listEntries(tx *bolt.Tx) error {
+	if keyFilter != "" {
+		keyRE, err := regexp.Compile(keyFilter)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Bad key filter RE: %s\n", err)
+			os.Exit(2)
+		}
+		keyAcceptor = keyRE.MatchString
+	}
+
 	b := tx.Bucket([]byte(bucket))
 	if b == nil {
 		return fmt.Errorf("No such bucket: %s", bucket)

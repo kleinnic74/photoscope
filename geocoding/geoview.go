@@ -1,10 +1,9 @@
-package main
+package geocoding
 
 import (
 	"fmt"
 	"image/color"
 	"io"
-	"log"
 
 	"bitbucket.org/kleinnic74/photos/domain/gps"
 	svg "github.com/ajstarks/svgo"
@@ -24,11 +23,6 @@ type GeoView struct {
 
 func NewGeoView(out io.Writer) *GeoView {
 	canvas := svg.New(out)
-	canvas.Startpercent(100, 100, `viewBox="-180 -90 360 180"`)
-	canvas.Gtransform("scale(1,-1)")
-	canvas.Path("M 0 -90 l 0 180", strokeGrid...)
-	canvas.Path("M -180 0 l 360 0", strokeGrid...)
-	canvas.Path("M -180 -90 L -180 90 L 180 90 L 180 -90 Z", strokeGrid...)
 	return &GeoView{
 		canvas: canvas,
 	}
@@ -48,8 +42,15 @@ func rectPath(bounds gps.Rect) string {
 	return fmt.Sprintf("M %f %f l 0 %f l %f 0 l 0 %f Z", bounds.X0(), bounds.Y0(), bounds.H(), bounds.W(), -bounds.H())
 }
 
+func (g *GeoView) Begin(bounds gps.Rect) {
+	g.canvas.Startpercent(100, 100, fmt.Sprintf(`viewBox="%f %f %f %f"`, bounds.X0(), bounds.Y0(), bounds.W(), bounds.H()))
+	g.canvas.Gtransform("scale(1,-1)")
+	g.canvas.Path("M 0 -90 l 0 180", strokeGrid...)
+	g.canvas.Path("M -180 0 l 360 0", strokeGrid...)
+	g.canvas.Path("M -180 -90 L -180 90 L 180 90 L 180 -90 Z", strokeGrid...)
+}
+
 func (g *GeoView) Level(depth int, bounds gps.Rect) {
-	log.Printf("Quad: %v [%d]", bounds, depth)
 	g.canvas.Group()
 	g.canvas.Path(xlinePath(bounds), strokeQuad...)
 	g.canvas.Path(ylinePath(bounds), strokeQuad...)
@@ -62,8 +63,7 @@ func (g *GeoView) Object(bounds gps.Rect) {
 	g.canvas.Gend()
 }
 
-func (g *GeoView) Close() error {
+func (g *GeoView) End() {
 	g.canvas.Gend()
 	g.canvas.End()
-	return nil
 }

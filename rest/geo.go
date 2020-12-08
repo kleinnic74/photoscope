@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"bitbucket.org/kleinnic74/photos/domain/gps"
+	"bitbucket.org/kleinnic74/photos/geocoding"
 	"bitbucket.org/kleinnic74/photos/library"
 	"bitbucket.org/kleinnic74/photos/logging"
 	"bitbucket.org/kleinnic74/photos/rest/cursor"
@@ -79,4 +80,28 @@ func (g *GeoHandler) getPhotosByCountry(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 	respondWithJSON(w, http.StatusOK, cursor.PageFor(v, c, hasMore))
+}
+
+type GeoCacheHandler struct {
+	cache *geocoding.Cache
+}
+
+func NewGeoCacheHandler(cache *geocoding.Cache) *GeoCacheHandler {
+	return &GeoCacheHandler{cache: cache}
+}
+
+func (g *GeoCacheHandler) InitRoutes(r *mux.Router) {
+	r.HandleFunc("/geo/cache/stats", g.getGeoCache).Methods("GET")
+	r.HandleFunc("/geo/cache/view", g.renderSvg).Methods("GET")
+}
+
+func (g *GeoCacheHandler) getGeoCache(w http.ResponseWriter, r *http.Request) {
+	respondWithJSON(w, http.StatusOK, g.cache.DumpStats())
+}
+
+func (g *GeoCacheHandler) renderSvg(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "image/svg+xml")
+	w.WriteHeader(http.StatusOK)
+	renderer := geocoding.NewGeoView(w)
+	g.cache.Visit(renderer)
 }

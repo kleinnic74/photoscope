@@ -14,7 +14,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const GeoIndexVersion = library.Version(4)
+const GeoIndexVersion = library.Version(5)
 
 type boltGeoIndex struct {
 	db *bolt.DB
@@ -57,6 +57,7 @@ func (idx *boltGeoIndex) MigrateStructure(ctx context.Context, from library.Vers
 	migrations := index.NewStructuralMigrations()
 	migrations.Register(library.Version(3), index.StructuralMigrationFunc(idx.deleteLegacyBuckets))
 	migrations.Register(library.Version(4), index.ForceReindex)
+	migrations.Register(library.Version(5), index.ForceReindex)
 	reindex, err := migrations.Apply(from, GeoIndexVersion)
 	return GeoIndexVersion, reindex, err
 }

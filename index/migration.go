@@ -8,6 +8,7 @@ import (
 	"bitbucket.org/kleinnic74/photos/logging"
 	"github.com/boltdb/bolt"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 type MigratableInstances interface {
@@ -81,6 +82,15 @@ func (c *MigrationCoordinator) GetIndexStatus(name Name) (IndexStatus, bool) {
 	return IndexStatus{Version: state.Version}, true
 }
 
+type loggableIndexes []Name
+
+func (l loggableIndexes) MarshalLogArray(e zapcore.ArrayEncoder) error {
+	for i := range l {
+		e.AppendString(string(l[i]))
+	}
+	return nil
+}
+
 func (c *MigrationCoordinator) Migrate(ctx context.Context) ([]Name, error) {
 	var needReindexing []Name
 	logger, ctx := logging.SubFrom(ctx, "migrationCoordinator")
@@ -106,6 +116,7 @@ func (c *MigrationCoordinator) Migrate(ctx context.Context) ([]Name, error) {
 			logger.Warn("Migration failed", zap.Error(err))
 		}
 	}
+	logger.Info("Migration finished", zap.Array("staleIndexes", loggableIndexes(needReindexing)))
 	return needReindexing, nil
 }
 

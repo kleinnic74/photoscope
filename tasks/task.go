@@ -64,10 +64,12 @@ type Execution struct {
 	task      Task
 }
 
+type CompletionFunc func(Execution)
+
 type TaskExecutor interface {
 	Submit(context.Context, Task) (Execution, error)
 	ListTasks(context.Context) []Execution
-	DrainTasks(context.Context)
+	DrainTasks(context.Context, CompletionFunc)
 }
 
 var ErrExecutorNotRunning = errors.New("TaskExecutor is not running")

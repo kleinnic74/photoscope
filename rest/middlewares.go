@@ -33,6 +33,12 @@ func (w *responseWrapper) WriteHeader(status int) {
 	w.writer.WriteHeader(status)
 }
 
+func (w *responseWrapper) Flush() {
+	if f, ok := w.writer.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
 func logRequest(f http.Handler, name string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()

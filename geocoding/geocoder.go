@@ -20,7 +20,7 @@ type Resolver interface {
 type Geocoder struct {
 	index    library.GeoIndex
 	resolver Resolver
-	cache    *cache
+	Cache    *Cache
 }
 
 func NewGeocoder(idx library.GeoIndex, resolver Resolver) *Geocoder {
@@ -28,7 +28,7 @@ func NewGeocoder(idx library.GeoIndex, resolver Resolver) *Geocoder {
 	return &Geocoder{
 		index:    idx,
 		resolver: c,
-		cache:    c,
+		Cache:    c,
 	}
 }
 
@@ -37,7 +37,7 @@ func (g *Geocoder) RegisterTasks(repo *tasks.TaskRepository) {
 		return NewGeoLookupTask(g)
 	})
 	repo.RegisterWithProperties("populateCache", func() tasks.Task {
-		return newLoadKnownPlaces(g.index, g.cache)
+		return newLoadKnownPlaces(g.index, g.Cache)
 	}, tasks.TaskProperties{
 		RunOnStart:   true,
 		UserRunnable: false,

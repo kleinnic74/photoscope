@@ -6,7 +6,9 @@ import (
 
 	"bitbucket.org/kleinnic74/photos/domain/gps"
 	"bitbucket.org/kleinnic74/photos/library"
+	"bitbucket.org/kleinnic74/photos/logging"
 	"bitbucket.org/kleinnic74/photos/tasks"
+	"go.uber.org/zap"
 
 	"github.com/codingsince1985/geo-golang/openstreetmap"
 )
@@ -47,10 +49,10 @@ func (t geoLookupTask) Execute(ctx context.Context, executor tasks.TaskExecutor,
 
 type loadKnownPlaces struct {
 	index library.GeoIndex
-	cache *cache
+	cache *Cache
 }
 
-func newLoadKnownPlaces(index library.GeoIndex, cache *cache) tasks.Task {
+func newLoadKnownPlaces(index library.GeoIndex, cache *Cache) tasks.Task {
 	return loadKnownPlaces{index, cache}
 }
 
@@ -59,14 +61,19 @@ func (t loadKnownPlaces) Describe() string {
 }
 
 func (t loadKnownPlaces) Execute(ctx context.Context, executor tasks.TaskExecutor, lib library.PhotoLibrary) error {
+	log, ctx := logging.SubFrom(ctx, "loadKnownPlaces")
 	countriesAndPlaces, err := t.index.Locations(ctx)
 	if err != nil {
 		return err
 	}
+	var count int
 	for _, c := range countriesAndPlaces.Countries {
 		for _, p := range c.Places {
-			t.cache.Add(*p)
+			if t.cache.Add(*p) {
+				count++
+			}
 		}
 	}
+	log.Info("Populated cache", zap.Int("entries", count))
 	return nil
 }

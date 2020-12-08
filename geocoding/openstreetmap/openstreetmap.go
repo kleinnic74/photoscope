@@ -35,7 +35,7 @@ var (
 
 type resolver struct {
 	lang   string
-	client http.Client
+	client *http.Client
 }
 
 type boundingbox gps.Rect
@@ -71,9 +71,21 @@ func (b *boundingbox) UnmarshalJSON(data []byte) error {
 
 type address struct {
 	City       string `json:"city"`
+	Town       string `json:"town"`
+	Village    string `json:"village"`
 	Zip        string `json:"postcode"`
-	Country    string `json:"state"`
+	Country    string `json:"country"`
 	CountryISO string `json:"country_code"`
+}
+
+func (a address) CityName() string {
+	if a.City != "" {
+		return a.City
+	}
+	if a.Town != "" {
+		return a.Town
+	}
+	return a.Village
 }
 
 type latlon float64
@@ -107,11 +119,17 @@ func (l location) Pos() gps.Point {
 }
 
 func NewResolver(lang ...string) geocoding.Resolver {
-	return &resolver{
-		lang: strings.Join(lang, ","),
-		client: http.Client{
+	return NewResolverWithClient(
+		&http.Client{
 			Timeout: 5 * time.Second,
 		},
+		lang...)
+}
+
+func NewResolverWithClient(client *http.Client, lang ...string) geocoding.Resolver {
+	return &resolver{
+		lang:   strings.Join(lang, ","),
+		client: client,
 	}
 }
 
@@ -145,7 +163,7 @@ func (osm *resolver) ReverseGeocode(ctx context.Context, lat, lon float64) (*gps
 	if err := json.Unmarshal(data, &location); err != nil {
 		return nil, false, err
 	}
-	address := gps.AsAddress(location.Address.Country, location.Address.CountryISO, location.Address.City, location.Address.Zip)
+	address := gps.AsAddress(location.Address.Country, location.Address.CountryISO, location.Address.CityName(), location.Address.Zip)
 	address.BoundingBox = location.BoundingBox.Rect()
 	return &address, true, nil
 }

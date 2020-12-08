@@ -25,10 +25,11 @@ func (exec *dummyexec) ListTasks(ctx context.Context) []Execution {
 	return exec.executions
 }
 
-func (exec *dummyexec) DrainTasks(ctx context.Context) {
+func (exec *dummyexec) DrainTasks(ctx context.Context, completed CompletionFunc) {
 	for i, e := range exec.executions {
 		e.Status = Completed
 		e.Completed = time.Now()
 		exec.executions[i] = e
+		completed(e)
 	}
 }

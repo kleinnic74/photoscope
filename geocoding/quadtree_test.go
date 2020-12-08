@@ -66,3 +66,19 @@ func TestQuadTreeSingle(t *testing.T) {
 	assert.Equal(t, 1, len(items))
 	assert.Equal(t, "two", items[0])
 }
+
+func TestNodeSplitAndAdd(t *testing.T) {
+	node := newNode(gps.RectFrom(-1, -1, 1, 1), 5, 2)
+	node.split()
+	for i := 0; i < 4; i++ {
+		assert.Equal(t, 1, node.quads[i].depth, "Bad depth for node %d", i)
+	}
+	assert.Equal(t, gps.RectFrom(-1, -1, 0, 0), node.quads[0].bounds)
+	assert.Equal(t, gps.RectFrom(-1, 0, 0, 1), node.quads[1].bounds)
+	assert.Equal(t, gps.RectFrom(0, -1, 1, 0), node.quads[2].bounds)
+	assert.Equal(t, gps.RectFrom(0, 0, 1, 1), node.quads[3].bounds)
+	node.add(gps.RectFrom(-0.6, 0.2, -0.4, 0.4), "quadOne")
+	node.add(gps.RectFrom(0.6, -0.6, 0.8, -0.4), "quadTwo")
+	assert.Equal(t, "quadOne", node.quads[1].entries[0].data)
+	assert.Equal(t, "quadTwo", node.quads[2].entries[0].data)
+}

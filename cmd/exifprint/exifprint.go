@@ -102,15 +102,15 @@ func main() {
 			osm := openstreetmap.NewResolver("de", "en")
 			cache := geocoding.NewGeoCache(osm)
 			defer func() {
-				fmt.Fprintf(os.Stderr, "  Quadtree cache hits: %d\n", cache.Hits)
-				fmt.Fprintf(os.Stderr, "  Quadtree cache misses: %d\n", cache.Misses)
-				fmt.Fprintf(os.Stderr, "  Quadtree performance: %f%%\n", float64(cache.Hits)/float64(cache.Hits+cache.Misses))
+				stats := cache.DumpStats()
+				fmt.Fprintf(os.Stderr, "  Quadtree cache hits: %d\n", stats.Hits)
+				fmt.Fprintf(os.Stderr, "  Quadtree cache misses: %d\n", stats.Misses)
+				fmt.Fprintf(os.Stderr, "  Quadtree performance: %f%%\n", float64(stats.Hits)/float64(stats.Hits+stats.Misses))
 				if dumpQT {
 					out, err := os.Create("qt.svg")
 					if err == nil {
-						view := NewGeoView(out)
+						view := geocoding.NewGeoView(out)
 						cache.Visit(view)
-						view.Close()
 					}
 				}
 			}()

@@ -19,6 +19,7 @@ import (
 
 	"bitbucket.org/kleinnic74/photos/consts"
 	"bitbucket.org/kleinnic74/photos/domain"
+	"bitbucket.org/kleinnic74/photos/events"
 	"bitbucket.org/kleinnic74/photos/geocoding"
 	"bitbucket.org/kleinnic74/photos/geocoding/openstreetmap"
 	"bitbucket.org/kleinnic74/photos/importer"
@@ -69,6 +70,15 @@ func main() {
 		log.Fatal("Failed to create directory", zap.String("dir", libDir), zap.Error(err))
 	}
 
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, os.Interrupt)
+	ctx, cancel := context.WithCancel(ctx)
+	go func() {
+		oscall := <-signals
+		logger.Info("Received signal", zap.Any("signal", oscall))
+		cancel()
+	}()
+
 	taskRepo := tasks.NewTaskRepository()
 	tasks.RegisterTasks(taskRepo)
 	importer.RegisterTasks(taskRepo)
@@ -115,9 +125,13 @@ func main() {
 		logger.Fatal("Failed to initialize dataindex", zap.Error(err))
 	}
 
+	bus := events.NewStream()
+	go bus.Dispatch(ctx)
+
 	executor := tasks.NewSerialTaskExecutor(lib)
-	executorContext, cancelExecutor := context.WithCancel(ctx)
-	go executor.DrainTasks(executorContext)
+	go executor.DrainTasks(ctx, func(e tasks.Execution) {
+		bus.Publish(events.Event{Name: "tasks", Action: "completed"})
+	})
 
 	indexer := index.NewIndexer(indexTracker, executor)
 	indexer.RegisterDirect("date", boltstore.DateIndexVersion, dateindex.Add)
@@ -134,6 +148,12 @@ func main() {
 	// REST Handlers
 	router := mux.NewRouter()
 
+	metrics := rest.NewMetricsHandler()
+	metrics.InitRoutes(router)
+
+	events := rest.NewEventHandler(bus)
+	events.InitRoutes(router)
+
 	photoApp := rest.NewApp(lib)
 	photoApp.InitRoutes(router)
 
@@ -142,6 +162,9 @@ func main() {
 
 	geo := rest.NewGeoHandler(geoindex, lib)
 	geo.InitRoutes(router)
+
+	geocache := rest.NewGeoCacheHandler(geocoder.Cache)
+	geocache.InitRoutes(router)
 
 	tasksApp := rest.NewTaskHandler(taskRepo, executor)
 	tasksApp.InitRoutes(router)
@@ -160,17 +183,6 @@ func main() {
 	} else {
 		router.PathPrefix("/").Handler(rest.Embedder())
 	}
-
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-
-	signalContext, cancel := context.WithCancel(ctx)
-
-	go func() {
-		oscall := <-c
-		logger.Info("Received signal", zap.Any("signal", oscall))
-		cancel()
-	}()
 
 	if ifs, err := net.Interfaces(); err == nil {
 		for _, intf := range ifs {
@@ -201,7 +213,7 @@ func main() {
 		logger.Info("HTTP server stopped")
 	}()
 
-	<-signalContext.Done()
+	<-ctx.Done()
 
 	logger.Info("Stopping server...")
 
@@ -212,8 +224,6 @@ func main() {
 	if err := server.Shutdown(ctxShutdown); err != nil {
 		logger.Fatal(("Failed to shutdown HTTP server"), zap.Error(err))
 	}
-
-	cancelExecutor()
 
 	logger.Info("Terminated gracefully")
 

@@ -36,7 +36,7 @@ type AddressFields struct {
 type Address struct {
 	AddressFields
 	ID          PlaceID `json:"id"`
-	BoundingBox *Rect   `json:"boundingbox"`
+	BoundingBox *Rect   `json:"boundingbox,omitempty"`
 }
 
 func AsAddress(country, iso, city, zip string) Address {
@@ -55,12 +55,12 @@ func AsAddress(country, iso, city, zip string) Address {
 }
 
 func (a *Address) UnmarshalJSON(data []byte) (err error) {
-	var fields AddressFields
-	if err = json.Unmarshal(data, &fields); err != nil {
+	type aliasAddress *Address
+	alias := aliasAddress(a)
+	if err = json.Unmarshal(data, alias); err != nil {
 		return
 	}
-	a.ID = asPlaceID(fields.Country.ID, fields.City, fields.Zip)
-	a.AddressFields = fields
+	a.ID = asPlaceID(alias.AddressFields.Country.ID, alias.AddressFields.City, alias.AddressFields.Zip)
 	return
 }
 

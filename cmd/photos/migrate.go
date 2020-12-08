@@ -41,5 +41,8 @@ func (t migrateTask) Execute(ctx context.Context, executor tasks.TaskExecutor, _
 	}
 	updateIndexes := t.indexer.NewFindUnindexedTask(staleIndexes)
 	_, err = executor.Submit(ctx, updateIndexes)
+	if err != nil {
+		logger.Warn("Index update task submission failed", zap.Error(err))
+	}
 	return err
 }
