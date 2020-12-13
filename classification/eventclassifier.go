@@ -8,28 +8,27 @@ import (
 
 	"image/color"
 
-	"bitbucket.org/kleinnic74/photos/domain"
+	"bitbucket.org/kleinnic74/photos/library"
 )
 
-type EventClassifier struct {
-	timestampedPhotos []classification.Timestamped
+type tsPhoto struct {
+	photo *library.Photo
 }
 
-type TimestampedPhoto *domain.Photo
+func (p tsPhoto) Timestamp() time.Time {
+	return p.photo.DateTaken
+}
 
-func (p TimestampedPhoto) Timestamp() time.Time {
-	return p.DateTaken()
+type EventClassifier struct {
+	timestampedPhotos []Timestamped
 }
 
 func NewEventClassifier() *EventClassifier {
-	return &EventClassifier{
-		timestampedPhotos: make([]classification.Timestamped, 0),
-	}
+	return &EventClassifier{}
 }
 
-func (c *EventClassifier) Add(p domain.Photo) {
-	tp := TimestampedPhoto(&p)
-	c.timestampedPhotos = append(c.timestampedPhotos, tp)
+func (c *EventClassifier) Add(p *library.Photo) {
+	c.timestampedPhotos = append(c.timestampedPhotos, tsPhoto{p})
 }
 
 func (c *EventClassifier) DistanceMatrixToImage() image.Image {
@@ -39,7 +38,7 @@ func (c *EventClassifier) DistanceMatrixToImage() image.Image {
 	draw.Draw(img, img.Bounds(), image.White, image.ZP, draw.Src)
 	for n, k := range kValues {
 		offset := n * size
-		mat := classification.NewDistanceMatrixWithDistanceFunc(c.timestampedPhotos, classification.TimestampDistanceK(float64(k*3600)))
+		mat := NewDistanceMatrixWithDistanceFunc(c.timestampedPhotos, TimestampDistanceK(float64(k*3600)))
 		for i := range mat {
 			for j := range mat[i] {
 				gray := uint8(mat[i][j] * 255)
