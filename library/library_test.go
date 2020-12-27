@@ -49,7 +49,7 @@ func TestMarshallJSON(t *testing.T) {
 				Hash:      BinaryHash("1234"),
 			},
 			JSON: `{
-  "schema": 3,
+  "schema": 4,
   "id": "id",
   "path": "to/file",
   "format": "jpg",

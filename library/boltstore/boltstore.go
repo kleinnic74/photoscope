@@ -5,14 +5,12 @@ package boltstore
 import (
 	"bytes"
 	"encoding/json"
-	"strings"
-	"time"
+	"fmt"
 
 	"bitbucket.org/kleinnic74/photos/consts"
 	"bitbucket.org/kleinnic74/photos/library"
 
 	"github.com/boltdb/bolt"
-	"github.com/reusee/mmh3"
 )
 
 var (
@@ -89,22 +87,29 @@ func (store *BoltStore) Exists(hash library.BinaryHash) (other library.PhotoID, 
 
 // Add adds the given photo to this store
 func (store *BoltStore) Add(p *library.Photo) error {
-	id := sortableID(p.DateTaken, string(p.ID))
+	// Sanity check
+	if p.ID == "" {
+		panic(fmt.Errorf("Photo %v has no ID", p))
+	}
+	if len(p.SortID) == 0 {
+		panic(fmt.Errorf("Photo %s has no SortID", p.ID))
+	}
+
 	encoded, err := json.Marshal(p)
 	if err != nil {
 		return err
 	}
 	return store.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket(photosBucket)
-		if existing := b.Get(id); existing != nil {
+		if existing := b.Get(p.SortID); existing != nil {
 			return library.PhotoAlreadyExists(p.ID)
 		}
-		err = b.Put(id, encoded)
+		err = b.Put(p.SortID, encoded)
 		if err != nil {
 			return err
 		}
 		b = tx.Bucket(idMapBucket)
-		err = b.Put([]byte(p.ID), id)
+		err = b.Put([]byte(p.ID), p.SortID)
 		if err != nil {
 			return err
 		}
@@ -117,6 +122,14 @@ func (store *BoltStore) Add(p *library.Photo) error {
 }
 
 func (store *BoltStore) Update(p *library.Photo) error {
+	// Sanity check
+	if p.ID == "" {
+		panic(fmt.Errorf("Photo %v has no ID", p))
+	}
+	if len(p.SortID) == 0 {
+		panic(fmt.Errorf("Photo %s has no SortID", p.ID))
+	}
+
 	encoded, err := json.Marshal(p)
 	if err != nil {
 		return err
@@ -174,14 +187,13 @@ func (store *BoltStore) findRange(f func(Cursor) Cursor, order consts.SortOrder)
 }
 
 // Find returns all photos in this library between the given time instants
-func (store *BoltStore) Find(start, end time.Time, order consts.SortOrder) ([]*library.Photo, error) {
+func (store *BoltStore) Find(start, end library.OrderedID, order consts.SortOrder) ([]*library.Photo, error) {
 	var found = make([]*library.Photo, 0)
-	min, max := boundaryIDs(start, end)
 	err := store.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(photosBucket)
 		c := b.Cursor()
 
-		for k, v := c.Seek(min); k != nil && bytes.Compare(k, max) <= 0; k, v = c.Next() {
+		for k, v := c.Seek(start); k != nil && bytes.Compare(k, end) <= 0; k, v = c.Next() {
 			var photo library.Photo
 			if err := json.Unmarshal(v, &photo); err != nil {
 				return err
@@ -211,25 +223,4 @@ func (store *BoltStore) Get(id library.PhotoID) (*library.Photo, error) {
 		}
 		return library.NotFound(id)
 	})
-}
-
-func sortableID(ts time.Time, filename string) []byte {
-	var id bytes.Buffer
-	id.Write([]byte(ts.UTC().Format(time.RFC3339)))
-	h := mmh3.New32()
-	h.Write([]byte(strings.ToLower(filename)))
-	id.Write(h.Sum(nil))
-	return id.Bytes()
-}
-
-func boundaryIDs(begin, end time.Time) (low, high []byte) {
-	var lbuf bytes.Buffer
-	lbuf.Write([]byte(begin.UTC().Format(time.RFC3339)))
-	lbuf.Write([]byte{0, 0, 0, 0})
-	low = lbuf.Bytes()
-	var hbuf bytes.Buffer
-	hbuf.Write([]byte(end.UTC().Format(time.RFC3339)))
-	hbuf.Write([]byte{0xFF, 0xFF, 0xFF, 0xFF})
-	high = lbuf.Bytes()
-	return
 }

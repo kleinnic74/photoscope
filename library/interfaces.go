@@ -1,6 +1,7 @@
 package library
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"time"
@@ -11,6 +12,15 @@ import (
 
 // PhotoID is the unique identifier of a Photo
 type PhotoID string
+
+// OrderedID is an ID whose values can be sorted based on time
+type OrderedID []byte
+
+type AsendingOrderedIDs []OrderedID
+
+func (a AsendingOrderedIDs) Len() int           { return len(a) }
+func (a AsendingOrderedIDs) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a AsendingOrderedIDs) Less(i, j int) bool { return bytes.Compare(a[i], a[j]) == -1 }
 
 // PhotoLibrary represents the operations on a library of photos
 type PhotoLibrary interface {
@@ -48,7 +58,7 @@ type Store interface {
 	Get(id PhotoID) (*Photo, error)
 	FindAll(order consts.SortOrder) ([]*Photo, error)
 	FindAllPaged(start, maxCount int, order consts.SortOrder) ([]*Photo, bool, error)
-	Find(start, end time.Time, order consts.SortOrder) ([]*Photo, error)
+	Find(start, end OrderedID, order consts.SortOrder) ([]*Photo, error)
 }
 
 // ClosableStore is a Store that can be closed

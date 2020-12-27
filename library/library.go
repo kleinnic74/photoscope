@@ -107,6 +107,7 @@ func (lib *BasicPhotoLibrary) AddCallback(callback NewPhotoCallback) {
 func (lib *BasicPhotoLibrary) Add(ctx context.Context, photo domain.Photo, content io.Reader) error {
 	ctx = logging.Context(ctx, logging.From(ctx).Named("library").With(zap.String("source", photo.Name())))
 	targetDir, name, id := canonicalizeFilename(photo)
+	orderedID := orderedIDOf(photo.DateTaken().UTC(), id)
 	content, hash, err := LoadContent(content)
 	if err != nil {
 		return err
@@ -122,6 +123,7 @@ func (lib *BasicPhotoLibrary) Add(ctx context.Context, photo domain.Photo, conte
 	p := &Photo{
 		Path:        path,
 		ID:          id,
+		SortID:      orderedID,
 		DateTaken:   photo.DateTaken().UTC(),
 		Location:    photo.Location(),
 		Format:      photo.Format(),
@@ -158,7 +160,8 @@ func (lib *BasicPhotoLibrary) FindAllPaged(ctx context.Context, start, maxCount 
 // Find returns all photos stored in this library that have been taken between
 // the given start and end times
 func (lib *BasicPhotoLibrary) Find(ctx context.Context, start, end time.Time, order consts.SortOrder) ([]*Photo, error) {
-	return lib.db.Find(start, end, order)
+	min, max := boundaryIDs(start, end)
+	return lib.db.Find(min, max, order)
 }
 
 // OpenContent returns an io.ReadCloser on the content of the photo with the given ID.
@@ -320,7 +323,8 @@ func (lib *BasicPhotoLibrary) MigrateInstances(ctx context.Context) error {
 			logger.Warn("Migration failed", zap.String("photo", string(p.ID)))
 			continue
 		}
-		if updated != *p {
+
+		if updated.schema != p.schema {
 			logger.Info("Photo migrated", zap.String("photo", string(p.ID)))
 			lib.db.Update(&updated)
 			count++
@@ -375,10 +379,18 @@ func addOrientation(ctx context.Context, p Photo, in ReaderFunc) (Photo, error) 
 	return p, nil
 }
 
+func addSortID(ctx context.Context, p Photo, in ReaderFunc) (Photo, error) {
+	if len(p.SortID) == 0 {
+		p.SortID = orderedIDOf(p.DateTaken.UTC(), p.ID)
+	}
+	return p, nil
+}
+
 func instanceMigrations() InstanceMigrations {
 	migrations := NewInstanceMigrations()
 	migrations.Register(Version(1), InstanceFunc(migratePath))
 	migrations.Register(Version(1), InstanceFunc(addOrientation))
 	migrations.Register(Version(3), InstanceFunc(migrateHash))
+	migrations.Register(Version(4), InstanceFunc(addSortID))
 	return migrations
 }

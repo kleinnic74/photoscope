@@ -33,7 +33,7 @@ func TestMigrations(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Error while applying migrations: %s", err)
 		}
-		changed := result != d.src
+		changed := result.schema != d.src.schema
 		if changed != d.expectChange {
 			t.Errorf("#%d: Unexpected change status, expected %t, got %t", i, d.expectChange, changed)
 		}
