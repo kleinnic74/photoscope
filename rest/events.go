@@ -1,45 +1,24 @@
 package rest
 
 import (
-	"encoding/json"
 	"net/http"
 
-	"bitbucket.org/kleinnic74/photos/events"
-	"bitbucket.org/kleinnic74/photos/logging"
+	"bitbucket.org/kleinnic74/photos/library"
 	"github.com/gorilla/mux"
 )
 
-type EventHandler struct {
-	events *events.Stream
+type Classifiers struct {
+	lib library.PhotoLibrary
 }
 
-func NewEventHandler(stream *events.Stream) *EventHandler {
-	return &EventHandler{
-		events: stream,
-	}
+func NewClassifiers(lib library.PhotoLibrary) *Classifiers {
+	return &Classifiers{lib}
 }
 
-func (e *EventHandler) InitRoutes(router *mux.Router) {
-	router.HandleFunc("/events", e.listen).Methods("GET")
+func (c *Classifiers) InitRoutes(r *mux.Router) {
+	r.HandleFunc("/events", c.distanceMatrix).Methods(http.MethodGet)
 }
 
-func (e *EventHandler) listen(w http.ResponseWriter, r *http.Request) {
-	logger := logging.From(r.Context())
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		logger.Warn("HTTP Flusher not supported")
-		w.WriteHeader(http.StatusNotImplemented)
-		return
-	}
+func (c *Classifiers) distanceMatrix(w http.ResponseWriter, r *http.Request) {
 
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-
-	e.events.Listen(r.Context(), func(event events.Event) {
-		if err := json.NewEncoder(w).Encode(event); err != nil {
-			return
-		}
-		flusher.Flush()
-	})
 }

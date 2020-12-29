@@ -43,7 +43,7 @@ var (
 
 func getCommand(args []string) (command, *flag.FlagSet, error) {
 	if len(args) == 0 {
-		return commands[0], commands[0].flags(), nil
+		return command{}, nil, fmt.Errorf("Missing argument")
 	}
 	for i := range commands {
 		if args[0] == commands[i].name {

@@ -32,13 +32,13 @@ func (c *EventClassifier) Add(p *library.Photo) {
 }
 
 func (c *EventClassifier) DistanceMatrixToImage() image.Image {
-	kValues := []int{96, 48, 24, 6}
+	kValues := []time.Duration{96, 48, 24, 6}
 	size := len(c.timestampedPhotos)
 	img := image.NewRGBA(image.Rect(0, 0, size*len(kValues), size))
 	draw.Draw(img, img.Bounds(), image.White, image.ZP, draw.Src)
 	for n, k := range kValues {
 		offset := n * size
-		mat := NewDistanceMatrixWithDistanceFunc(c.timestampedPhotos, TimestampDistanceK(float64(k*3600)))
+		mat := NewDistanceMatrixWithDistanceFunc(c.timestampedPhotos, TimestampDistance(k*time.Hour))
 		for i := range mat {
 			for j := range mat[i] {
 				gray := uint8(mat[i][j] * 255)
