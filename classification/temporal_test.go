@@ -19,20 +19,21 @@ import (
 
 type WithTimestamp time.Time
 
+func (t WithTimestamp) Timestamp() time.Time {
+	return time.Time(t)
+}
+
 func TestNewDistanceMatrix(t *testing.T) {
 	data := []classification.Timestamped{
 		parseTime("2018-02-24T15:30:30Z"),
 		parseTime("2018-01-13T16:30:00Z"),
 		parseTime("2018-01-24T15:25:00Z"),
 	}
-	mat := classification.NewDistanceMatrix(data)
-	if len(mat) != 3 {
-		t.Fatalf("Expected matrix of 3x3, but got: %dx%d", len(mat), len(mat[0]))
+	mat := classification.NewDistanceMatrixWithDistanceFunc(classification.TimestampDistance(12 * time.Hour))
+	ssm := mat.SelfSimilarityMatrix(data)
+	if len(ssm) != 3 {
+		t.Fatalf("Expected self-similarity matrix of 3x3, but got: %dx%d", len(ssm), len(ssm[0]))
 	}
-}
-
-func (t WithTimestamp) Timestamp() time.Time {
-	return time.Time(t)
 }
 
 func parseTime(value string) WithTimestamp {
@@ -69,27 +70,44 @@ func TestGaussianCheckerboardKernel(t *testing.T) {
 
 func TestNoveltyScores(t *testing.T) {
 	data := loadEventData(t)
-	m := classification.NewDistanceMatrixWithDistanceFunc(data, classification.TimestampDistance(12*time.Hour))
+	m := classification.NewDistanceMatrixWithDistanceFunc(classification.TimestampDistance(12 * time.Hour))
+	ssm := m.SelfSimilarityMatrix(data)
 	img := image.NewRGBA(image.Rect(0, 0, len(data), 2*len(data)))
-	for i := 0; i < len(m); i++ {
-		for j := 0; j < len(m[i]); j++ {
-			g := uint8(255. * m[i][j])
+	for i := 0; i < len(ssm); i++ {
+		for j := 0; j < len(ssm); j++ {
+			g := uint8(255. * ssm[i][j])
 			img.Set(i, j, color.RGBA{g, g, g, 255})
 		}
 	}
-	scores, min, max := m.NoveltyScores()
-	assert.Equal(t, len(data), len(scores))
+	scores := m.NoveltyScores(ssm, 3)
+	assert.Equal(t, len(data), len(scores.Scores))
 	draw.Draw(img, image.Rect(0, len(data), len(data), 2*len(data)), image.White, image.ZP, draw.Src)
-	normalized := make([]float64, len(data))
-	positive := make([]bool, len(data))
 	for i := 0; i < len(data); i++ {
-		normalized[i] = (scores[i] - min) / (max - min)
-		positive[i] = normalized[i] > 0
-		y := 2*len(data) - int(normalized[i]*float64(len(data)))
-		img.Set(i, y, color.Black)
-		fmt.Fprintf(os.Stdout, "%d: %f [%f] [min=%f, max=%f]\n", i, scores[i], normalized[i], min, max)
+		y := 2*len(data) - int(scores.Normalized(i)*float64(len(data)))
+		var c color.Color
+		switch scores.Scores[i].Boundary {
+		case true:
+			c = color.RGBA{R: 255, A: 255}
+		default:
+			c = color.Black
+		}
+		img.Set(i, y, c)
+		fmt.Fprintf(os.Stdout, "%d: %f [%f] [min=%f, max=%f]\n", i, scores.Scores[i].Score, scores.Normalized(i), scores.Min, scores.Max)
 	}
 	saveImage(img, "noveltyScores.png")
+}
+
+func TestFindClusters(t *testing.T) {
+	inputData := loadEventData(t)
+	m := classification.NewDistanceMatrixWithDistanceFunc(classification.TimestampDistance(12 * time.Hour))
+	clusters := m.Clusters(inputData)
+	for i, c := range clusters {
+		fmt.Fprintf(os.Stdout, "Cluster #%d:\n", i)
+		for _, d := range c {
+			item := d.(data)
+			fmt.Fprintf(os.Stdout, "  %d - %s\n", item.line, item.id)
+		}
+	}
 }
 
 func saveImage(img image.Image, name string) {
@@ -99,8 +117,9 @@ func saveImage(img image.Image, name string) {
 }
 
 type data struct {
-	ts time.Time
-	id string
+	line int
+	ts   time.Time
+	id   string
 }
 
 func (d data) Timestamp() time.Time {
@@ -127,7 +146,7 @@ func loadEventData(t *testing.T) []classification.Timestamped {
 		if err != nil {
 			t.Fatalf("Error while parsing input data '%s' at %d: %s", parts[0], lineNb, err)
 		}
-		d = append(d, data{ts: ts, id: parts[1]})
+		d = append(d, data{line: lineNb, ts: ts, id: parts[1]})
 		lineNb++
 	}
 	return d

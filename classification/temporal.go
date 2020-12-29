@@ -4,7 +4,6 @@
 package classification
 
 import (
-	"fmt"
 	"math"
 	"sort"
 	"time"
@@ -36,60 +35,89 @@ func TimestampDistance(d time.Duration) DistanceFunc {
 	}
 }
 
-type DistanceMatrix [][]float64
-
-func NewDistanceMatrix(data TimestampedData) DistanceMatrix {
-	// k = 5 hours (5h * 60m * 60sec => 5hrs in seconds)
-	return NewDistanceMatrixWithDistanceFunc(data, TimestampDistance(5*time.Hour))
+type DistanceClassifier struct {
+	d DistanceFunc
 }
 
-func NewDistanceMatrixWithDistanceFunc(data TimestampedData, d DistanceFunc) DistanceMatrix {
-	// Data must be sorted in ascending order
-	sort.Sort(data)
-	var mat DistanceMatrix
+func NewDistanceMatrixWithDistanceFunc(d DistanceFunc) (mat DistanceClassifier) {
+	return DistanceClassifier{d: d}
+}
+
+type NoveltyScore struct {
+	Score      float64
+	Derivative float64
+	Boundary   bool
+}
+type NoveltyScores struct {
+	Scores   []NoveltyScore
+	Min, Max float64
+}
+
+func (s NoveltyScores) Normalized(i int) float64 {
+	return (s.Scores[i].Score - s.Min) / (s.Max - s.Min)
+}
+
+func (m DistanceClassifier) SelfSimilarityMatrix(data TimestampedData) [][]float64 {
 	size := data.Len()
-	mat = make([][]float64, size)
-	for i := range mat {
-		mat[i] = make([]float64, size)
-		for j := range mat[i] {
-			mat[i][j] = d(data[i].Timestamp(), data[j].Timestamp())
+	// Calculate self-similarity matrix
+	ssm := make([][]float64, size)
+	for i := range ssm {
+		ssm[i] = make([]float64, size)
+		for j := range ssm[i] {
+			ssm[i][j] = m.d(data[i].Timestamp(), data[j].Timestamp())
 		}
 	}
-	return mat
+	return ssm
 }
 
-func (m DistanceMatrix) Dimension() int {
-	return len(m)
-}
-
-func (m DistanceMatrix) NoveltyScores() ([]float64, float64, float64) {
-	kernelSize, n := 6, len(m)
-	scores := make([]float64, n)
+func (m DistanceClassifier) NoveltyScores(ssm [][]float64, kernelSize int) (scores NoveltyScores) {
+	n := len(ssm)
+	scores.Scores = make([]NoveltyScore, n)
+	scores.Min = math.Inf(1)
+	scores.Max = math.Inf(-1)
 	kernel := NewGaussianCherckerboardKernel(kernelSize)
-	var min, max float64
-	min = math.MaxFloat64
-	for i := 0; i < len(m); i++ {
+	for i := 0; i < n; i++ {
 		var score float64
 		for x := -kernelSize; x <= kernelSize; x++ {
 			for y := -kernelSize; y <= kernelSize; y++ {
 				indexX, indexY := i+x, i+y
 				if indexX >= 0 && indexY >= 0 && indexX < n && indexY < n {
-					score += kernel[x+kernelSize][y+kernelSize] * m[indexX][indexY]
+					score += kernel[x+kernelSize][y+kernelSize] * ssm[indexX][indexY]
 				}
 			}
 		}
-		scores[i] = score
-		min, max = math.Min(min, score), math.Max(max, score)
+		scores.Scores[i].Score = score
+		if i > 0 {
+			scores.Scores[i].Derivative = score - scores.Scores[i-1].Score
+			scores.Scores[i-1].Boundary = scores.Scores[i].Derivative < 0 && scores.Scores[i-1].Derivative > 0
+		}
+		scores.Min = math.Min(scores.Min, score)
+		scores.Max = math.Max(scores.Max, score)
 	}
-	return scores, min, max
+	return scores
+}
+
+func (m DistanceClassifier) Clusters(data TimestampedData) (clusters []TimestampedData) {
+	sort.Sort(data)
+	ssm := m.SelfSimilarityMatrix(data)
+	noveltyScores := m.NoveltyScores(ssm, 3)
+	var cluster TimestampedData
+	for i, s := range noveltyScores.Scores {
+		if s.Boundary {
+			if len(cluster) > 0 {
+				clusters = append(clusters, cluster)
+			}
+			cluster = TimestampedData{}
+		}
+		cluster = append(cluster, data[i])
+	}
+	clusters = append(clusters, cluster)
+	return
 }
 
 type Kernel [][]float64
 
 func NewGaussianCherckerboardKernel(l int) Kernel {
-	if l%2 != 0 {
-		panic(fmt.Errorf("Kernel size must be a multiple of 2, was %d", l))
-	}
 	k := make(Kernel, 2*l+1)
 	for i := -l; i <= l; i++ {
 		a := i + l

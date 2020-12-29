@@ -38,10 +38,11 @@ func (c *EventClassifier) DistanceMatrixToImage() image.Image {
 	draw.Draw(img, img.Bounds(), image.White, image.ZP, draw.Src)
 	for n, k := range kValues {
 		offset := n * size
-		mat := NewDistanceMatrixWithDistanceFunc(c.timestampedPhotos, TimestampDistance(k*time.Hour))
-		for i := range mat {
-			for j := range mat[i] {
-				gray := uint8(mat[i][j] * 255)
+		mat := NewDistanceMatrixWithDistanceFunc(TimestampDistance(k * time.Hour))
+		ssm := mat.SelfSimilarityMatrix(c.timestampedPhotos)
+		for i := range ssm {
+			for j := range ssm[i] {
+				gray := uint8(ssm[i][j] * 255)
 				c := color.RGBA{gray, gray, gray, 255}
 				img.Set(i+offset, j, c)
 			}
