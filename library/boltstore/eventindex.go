@@ -63,12 +63,12 @@ func (index *EventIndex) FindPaged(ctx context.Context, start, maxCount int) (ev
 	err = index.db.View(func(tx *bolt.Tx) error {
 		c := tx.Bucket(eventsBucket).Cursor()
 		var (
-			i int
-			k []byte
-			v []byte
+			i    int
+			k, v []byte
 		)
 		for k, v = c.First(); k != nil && i < start+maxCount; k, v = c.Next() {
 			if i < start {
+				i++
 				continue
 			}
 			var e Event
@@ -76,6 +76,29 @@ func (index *EventIndex) FindPaged(ctx context.Context, start, maxCount int) (ev
 				return err
 			}
 			events = append(events, e)
+			i++
+		}
+		hasMore = k != nil
+		return nil
+	})
+	return
+}
+
+func (index *EventIndex) FindPhotosPaged(ctx context.Context, eventID string, start, max int) (photos []library.PhotoID, hasMore bool, err error) {
+	err = index.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(photosByEventBucket).Bucket([]byte(eventID))
+		if b == nil {
+			return nil
+		}
+		c := b.Cursor()
+		var k, v []byte
+		var i int
+		for k, v = c.First(); k != nil && i < start+max; k, v = c.Next() {
+			if i < start {
+				i++
+				continue
+			}
+			photos = append(photos, library.PhotoID(v))
 			i++
 		}
 		hasMore = k != nil
