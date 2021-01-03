@@ -1,45 +1,61 @@
 package rest
 
 import (
-	"encoding/json"
+	"errors"
 	"net/http"
 
-	"bitbucket.org/kleinnic74/photos/events"
-	"bitbucket.org/kleinnic74/photos/logging"
+	"bitbucket.org/kleinnic74/photos/library"
+	"bitbucket.org/kleinnic74/photos/library/boltstore"
+	"bitbucket.org/kleinnic74/photos/rest/cursor"
+	"bitbucket.org/kleinnic74/photos/rest/views"
 	"github.com/gorilla/mux"
 )
 
-type EventHandler struct {
-	events *events.Stream
+var (
+	errorNoID = errors.New("Missing 'id'")
+)
+
+type EventsHandler struct {
+	events *boltstore.EventIndex
+	lib    library.PhotoLibrary
 }
 
-func NewEventHandler(stream *events.Stream) *EventHandler {
-	return &EventHandler{
-		events: stream,
-	}
+func NewEventsHandler(events *boltstore.EventIndex, lib library.PhotoLibrary) *EventsHandler {
+	return &EventsHandler{events, lib}
 }
 
-func (e *EventHandler) InitRoutes(router *mux.Router) {
-	router.HandleFunc("/events", e.listen).Methods("GET")
+func (h *EventsHandler) InitRoutes(r *mux.Router) {
+	r.HandleFunc("/events", h.listEvents).Methods(http.MethodGet)
+	r.HandleFunc("/events/{id}", h.photosForEvent).Methods(http.MethodGet)
 }
 
-func (e *EventHandler) listen(w http.ResponseWriter, r *http.Request) {
-	logger := logging.From(r.Context())
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		logger.Warn("HTTP Flusher not supported")
-		w.WriteHeader(http.StatusNotImplemented)
+func (h *EventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
+	page := cursor.DecodeFromRequest(r)
+	e, hasMore, err := h.events.FindPaged(r.Context(), page.Start, page.PageSize)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, err)
 		return
 	}
+	respondWithJSON(w, http.StatusOK, cursor.PageFor(e, page, hasMore))
+}
 
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-
-	e.events.Listen(r.Context(), func(event events.Event) {
-		if err := json.NewEncoder(w).Encode(event); err != nil {
-			return
+func (h *EventsHandler) photosForEvent(w http.ResponseWriter, r *http.Request) {
+	eventID, ok := mux.Vars(r)["id"]
+	if !ok {
+		respondWithError(w, http.StatusBadRequest, errorNoID)
+		return
+	}
+	page := cursor.DecodeFromRequest(r)
+	photoIDs, hasMore, err := h.events.FindPhotosPaged(r.Context(), eventID, page.Start, page.PageSize)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, err)
+		return
+	}
+	v := make([]views.Photo, len(photoIDs))
+	for i, p := range photoIDs {
+		if photo, err := h.lib.Get(r.Context(), p); err != nil {
+			v[i] = views.PhotoFrom(photo)
 		}
-		flusher.Flush()
-	})
+	}
+	respondWithJSON(w, http.StatusOK, cursor.PageFor(v, page, hasMore))
 }
