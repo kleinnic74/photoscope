@@ -14,8 +14,10 @@ var (
 	photosByEventBucket = []byte("_photosByEvent")
 )
 
+type EventID string
+
 type Event struct {
-	ID   string    `json:"id"`
+	ID   EventID   `json:"id"`
 	Name string    `json:"name,omitempty"`
 	From time.Time `json:"from"`
 	To   time.Time `json:"to"`
@@ -54,7 +56,23 @@ func (index *EventIndex) Add(ctx context.Context, e Event) error {
 }
 
 func (index *EventIndex) AddPhotosToEvent(ctx context.Context, e Event, photos []library.PhotoID) error {
+	encoded, err := json.Marshal(&e)
+	if err != nil {
+		return err
+	}
 	return index.db.Update(func(tx *bolt.Tx) error {
+		if err := tx.Bucket(eventsBucket).Put([]byte(e.ID), encoded); err != nil {
+			return err
+		}
+		b, err := tx.Bucket(photosByEventBucket).CreateBucketIfNotExists([]byte(e.ID))
+		if err != nil {
+			return err
+		}
+		for _, p := range photos {
+			if err := b.Put([]byte(p), []byte(p)); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 }
@@ -82,4 +100,19 @@ func (index *EventIndex) FindPaged(ctx context.Context, start, maxCount int) (ev
 		return nil
 	})
 	return
+}
+
+func (index *EventIndex) FindPhotos(ctx context.Context, event EventID) (photos []library.PhotoID, err error) {
+	return
+	err = index.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(photosByEventBucket).Bucket([]byte(event))
+		if b == nil {
+			return nil
+		}
+		c := b.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			photos = append(photos, library.PhotoID(v))
+		}
+		return nil
+	})
 }
