@@ -53,7 +53,7 @@ func (h *EventsHandler) photosForEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	v := make([]views.Photo, len(photoIDs))
 	for i, p := range photoIDs {
-		if photo, err := h.lib.Get(r.Context(), p); err != nil {
+		if photo, err := h.lib.Get(r.Context(), p); err == nil {
 			v[i] = views.PhotoFrom(photo)
 		}
 	}
