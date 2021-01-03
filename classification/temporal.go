@@ -5,24 +5,12 @@ package classification
 
 import (
 	"math"
-	"sort"
 	"time"
 )
 
-type Timestamped interface {
-	Timestamp() time.Time
-}
-
-type TimestampedData []Timestamped
-
-func (t TimestampedData) Len() int { return len(t) }
-
-func (t TimestampedData) Less(i, j int) bool {
-	return t[i].Timestamp().Before(t[j].Timestamp())
-}
-
-func (t TimestampedData) Swap(i, j int) {
-	t[i], t[j] = t[j], t[i]
+type TimestampedData interface {
+	Len() int
+	Get(int) time.Time
 }
 
 type DistanceFunc func(i, j time.Time) float64
@@ -39,7 +27,7 @@ type DistanceClassifier struct {
 	d DistanceFunc
 }
 
-func NewDistanceMatrixWithDistanceFunc(d DistanceFunc) (mat DistanceClassifier) {
+func NewDistanceClassifier(d DistanceFunc) (mat DistanceClassifier) {
 	return DistanceClassifier{d: d}
 }
 
@@ -64,7 +52,7 @@ func (m DistanceClassifier) SelfSimilarityMatrix(data TimestampedData) [][]float
 	for i := range ssm {
 		ssm[i] = make([]float64, size)
 		for j := range ssm[i] {
-			ssm[i][j] = m.d(data[i].Timestamp(), data[j].Timestamp())
+			ssm[i][j] = m.d(data.Get(i), data.Get(j))
 		}
 	}
 	return ssm
@@ -97,19 +85,22 @@ func (m DistanceClassifier) NoveltyScores(ssm [][]float64, kernelSize int) (scor
 	return scores
 }
 
-func (m DistanceClassifier) Clusters(data TimestampedData) (clusters []TimestampedData) {
-	sort.Sort(data)
+type Cluster struct {
+	First, Count int
+}
+
+func (m DistanceClassifier) Clusters(data TimestampedData) (clusters []Cluster) {
 	ssm := m.SelfSimilarityMatrix(data)
 	noveltyScores := m.NoveltyScores(ssm, 3)
-	var cluster TimestampedData
+	var cluster Cluster
 	for i, s := range noveltyScores.Scores {
 		if s.Boundary {
-			if len(cluster) > 0 {
+			if i-cluster.First > 0 {
 				clusters = append(clusters, cluster)
 			}
-			cluster = TimestampedData{}
+			cluster = Cluster{First: i}
 		}
-		cluster = append(cluster, data[i])
+		cluster.Count++
 	}
 	clusters = append(clusters, cluster)
 	return

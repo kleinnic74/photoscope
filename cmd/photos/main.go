@@ -65,7 +65,6 @@ func init() {
 }
 
 func main() {
-	//	classifier := NewEventClassifier()
 	if err := os.MkdirAll(libDir, os.ModePerm); err != nil {
 		log.Fatal("Failed to create directory", zap.String("dir", libDir), zap.Error(err))
 	}
@@ -125,6 +124,11 @@ func main() {
 		logger.Fatal("Failed to initialize dataindex", zap.Error(err))
 	}
 
+	eventindex, err := boltstore.NewEventIndex(db)
+	if err != nil {
+		logger.Fatal("Failed to initialize event database")
+	}
+
 	bus := events.NewStream()
 	go bus.Dispatch(ctx)
 
@@ -151,8 +155,8 @@ func main() {
 	metrics := rest.NewMetricsHandler()
 	metrics.InitRoutes(router)
 
-	events := rest.NewEventHandler(bus)
-	events.InitRoutes(router)
+	sse := rest.NewSSEHandler(bus)
+	sse.InitRoutes(router)
 
 	photoApp := rest.NewApp(lib)
 	photoApp.InitRoutes(router)
@@ -168,6 +172,9 @@ func main() {
 
 	tasksApp := rest.NewTaskHandler(taskRepo, executor)
 	tasksApp.InitRoutes(router)
+
+	events := rest.NewEventsHandler(eventindex, lib)
+	events.InitRoutes(router)
 
 	indexesRest := rest.NewIndexes(migrator)
 	indexesRest.Init(router)
@@ -226,15 +233,6 @@ func main() {
 	}
 
 	logger.Info("Terminated gracefully")
-
-	// img := classifier.DistanceMatrixToImage()
-	// log.Printf("Creating time-distance matrix image %s", matrixFilename)
-	// out, err := os.Create(matrixFilename)
-	// if err != nil {
-	// 	log.Fatalf("Could not create distance matrix: %s", err)
-	// }
-	// defer out.Close()
-	// png.Encode(out, img)
 }
 
 func launchStartupTasks(ctx context.Context, tasksRepo *tasks.TaskRepository, executor tasks.TaskExecutor) {

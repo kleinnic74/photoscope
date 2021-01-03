@@ -9,21 +9,21 @@ import (
 	"github.com/gorilla/mux"
 )
 
-type EventHandler struct {
+type SSEHandler struct {
 	events *events.Stream
 }
 
-func NewEventHandler(stream *events.Stream) *EventHandler {
-	return &EventHandler{
+func NewSSEHandler(stream *events.Stream) *SSEHandler {
+	return &SSEHandler{
 		events: stream,
 	}
 }
 
-func (e *EventHandler) InitRoutes(router *mux.Router) {
+func (e *SSEHandler) InitRoutes(router *mux.Router) {
 	router.HandleFunc("/eventstream", e.listen).Methods("GET")
 }
 
-func (e *EventHandler) listen(w http.ResponseWriter, r *http.Request) {
+func (e *SSEHandler) listen(w http.ResponseWriter, r *http.Request) {
 	logger := logging.From(r.Context())
 	flusher, ok := w.(http.Flusher)
 	if !ok {
