@@ -307,7 +307,7 @@ func ComputeHash(in io.Reader) (BinaryHash, error) {
 	return BinaryHash(base64.StdEncoding.EncodeToString(h.Sum(nil))), nil
 }
 
-func (lib *BasicPhotoLibrary) MigrateInstances(ctx context.Context) error {
+func (lib *BasicPhotoLibrary) MigrateInstances(ctx context.Context, progress func(int, int)) error {
 	migrations := instanceMigrations()
 	logger, ctx := logging.SubFrom(ctx, "upgradeDB")
 	photos, err := lib.FindAll(ctx, consts.Ascending)
@@ -315,7 +315,7 @@ func (lib *BasicPhotoLibrary) MigrateInstances(ctx context.Context) error {
 		return err
 	}
 	var count int
-	for _, p := range photos {
+	for i, p := range photos {
 		updated, err := migrations.Apply(ctx, *p, func() (io.ReadCloser, error) {
 			return lib.openPhoto(p.Path)
 		})
@@ -329,6 +329,7 @@ func (lib *BasicPhotoLibrary) MigrateInstances(ctx context.Context) error {
 			lib.db.Update(&updated)
 			count++
 		}
+		progress(i, len(photos))
 	}
 	if count > 0 {
 		logger.Info("Fixed photos in DB", zap.Int("count", count))

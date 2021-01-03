@@ -12,7 +12,7 @@ import (
 )
 
 type MigratableInstances interface {
-	MigrateInstances(context.Context) error
+	MigrateInstances(context.Context, func(int, int)) error
 }
 
 type MigratableStructure interface {
@@ -91,7 +91,7 @@ func (l loggableIndexes) MarshalLogArray(e zapcore.ArrayEncoder) error {
 	return nil
 }
 
-func (c *MigrationCoordinator) Migrate(ctx context.Context) ([]Name, error) {
+func (c *MigrationCoordinator) Migrate(ctx context.Context, progress func(int, int)) ([]Name, error) {
 	var needReindexing []Name
 	logger, ctx := logging.SubFrom(ctx, "migrationCoordinator")
 	logger.Info("Migrating structures")
@@ -111,7 +111,7 @@ func (c *MigrationCoordinator) Migrate(ctx context.Context) ([]Name, error) {
 	}
 	logger.Info("Migrating instances")
 	for _, i := range c.instances {
-		err := i.MigrateInstances(ctx)
+		err := i.MigrateInstances(ctx, progress)
 		if err != nil {
 			logger.Warn("Migration failed", zap.Error(err))
 		}

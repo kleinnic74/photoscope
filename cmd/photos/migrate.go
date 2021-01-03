@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 
 	"bitbucket.org/kleinnic74/photos/index"
 	"bitbucket.org/kleinnic74/photos/library"
@@ -13,6 +14,9 @@ import (
 type migrateTask struct {
 	indexer     *index.Indexer
 	coordinator *index.MigrationCoordinator
+
+	count int
+	done  int
 }
 
 func RegisterMigrationTask(repo *tasks.TaskRepository, coordinator *index.MigrationCoordinator, indexer *index.Indexer) {
@@ -25,16 +29,23 @@ func RegisterMigrationTask(repo *tasks.TaskRepository, coordinator *index.Migrat
 }
 
 func newMigrateTask(coordinator *index.MigrationCoordinator, indexer *index.Indexer) tasks.Task {
-	return migrateTask{coordinator: coordinator, indexer: indexer}
+	return &migrateTask{coordinator: coordinator, indexer: indexer}
 }
 
 func (t migrateTask) Describe() string {
-	return "Upgrade data"
+	if t.count == 0 {
+		return "Migrating data"
+	} else {
+		return fmt.Sprintf("Migrating data (%d of %d done)", t.done, t.count)
+	}
 }
 
-func (t migrateTask) Execute(ctx context.Context, executor tasks.TaskExecutor, _ library.PhotoLibrary) error {
+func (t *migrateTask) Execute(ctx context.Context, executor tasks.TaskExecutor, _ library.PhotoLibrary) error {
 	logger, ctx := logging.SubFrom(ctx, "migrationTask")
-	staleIndexes, err := t.coordinator.Migrate(ctx)
+	staleIndexes, err := t.coordinator.Migrate(ctx, func(i int, total int) {
+		t.done = i
+		t.count = total
+	})
 	if err != nil {
 		logger.Error("Error while migrating data", zap.Error(err))
 		return err
