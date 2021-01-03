@@ -17,6 +17,7 @@ import (
 	"github.com/gorilla/mux"
 	"go.uber.org/zap"
 
+	"bitbucket.org/kleinnic74/photos/classification"
 	"bitbucket.org/kleinnic74/photos/consts"
 	"bitbucket.org/kleinnic74/photos/domain"
 	"bitbucket.org/kleinnic74/photos/events"
@@ -128,6 +129,7 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to initialize event database")
 	}
+	classification.RegisterTasks(taskRepo, eventindex)
 
 	bus := events.NewStream()
 	go bus.Dispatch(ctx)
