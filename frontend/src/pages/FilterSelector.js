@@ -1,9 +1,10 @@
 import React, { Component } from 'react'
-import Timeline from '../components/Timeline'
 import PropTypes from 'prop-types'
 import axios from 'axios'
-import Locations from '../components/Locations'
 import Tabs from '../components/Tabs'
+import Locations from '../components/Locations'
+import Timeline from '../components/Timeline'
+import Events from '../components/Events'
 
 export default class FilterSelector extends Component {
     static propTypes = {
@@ -20,20 +21,24 @@ export default class FilterSelector extends Component {
 
         this.state = {
             timeline: {},
-            locations: {}
+            locations: {},
+            events: {}
         }
 
-        this.onDaySelected = this.onDaySelected.bind(this)
         this.onFilterChange = this.onFilterChange.bind(this)
+        this.onDaySelected = this.onDaySelected.bind(this)
         this.onPlaceSelected = this.onPlaceSelected.bind(this)
+        this.onEventSelected = this.onEventSelected.bind(this)
 
         this.refreshTimeline = this.refreshTimeline.bind(this)
         this.refreshPlaces = this.refreshPlaces.bind(this)
+        this.refreshEvents = this.refreshEvents.bind(this)
     }
 
     componentDidMount() {
         this.refreshTimeline()
         this.refreshPlaces()
+        this.refreshEvents()
     }
 
     refreshTimeline() {
@@ -56,6 +61,17 @@ export default class FilterSelector extends Component {
             .catch(error => console.log(error))
     }
 
+    refreshEvents() {
+        axios.get(this.props.baseURL+'/events', {
+            params: { p: 100 }
+        })
+            .then(response => response.data)
+            .then(data => {
+                console.log("Events:", data.data)
+                this.setState({ events: data.data })
+            })
+    }
+
     onDaySelected(day) {
         console.log("Filter changed to start at day:", day)
         this.props.onFilterChanged('/timeline/photos', { from: day })
@@ -63,6 +79,10 @@ export default class FilterSelector extends Component {
 
     onPlaceSelected(placeID) {
         this.props.onFilterChanged('/geo/photos/byplace/' + placeID)
+    }
+
+    onEventSelected(eventID) {
+        this.props.onFilterChanged('/events/'+eventID)
     }
 
     onFilterChange(tab) {
@@ -73,6 +93,10 @@ export default class FilterSelector extends Component {
                 break
             case 'Timeline':
                 this.refreshTimeline()
+                break
+            case 'Events':
+                this.refreshEvents()
+                break
             default:
                 break
         }
@@ -86,6 +110,9 @@ export default class FilterSelector extends Component {
                 </div>
                 <div label="Places">
                     <Locations locations={this.state.locations} onPlaceSelected={this.onPlaceSelected}></Locations>
+                </div>
+                <div label="Events">
+                    <Events events={this.state.events} onEventSelected={this.onEventSelected}></Events>
                 </div>
             </Tabs>
         )
