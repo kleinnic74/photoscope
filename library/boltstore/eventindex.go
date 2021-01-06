@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"bitbucket.org/kleinnic74/photos/library"
+	"bitbucket.org/kleinnic74/photos/logging"
 	"github.com/boltdb/bolt"
+	"go.uber.org/zap"
 )
 
 var (
@@ -55,12 +57,14 @@ func (index *EventIndex) Add(ctx context.Context, e Event) error {
 	})
 }
 
-func (index *EventIndex) AddPhotosToEvent(ctx context.Context, e Event, photos []library.PhotoID) error {
+func (index *EventIndex) AddPhotosToEvent(ctx context.Context, e Event, photos []library.ExtendedPhotoID) error {
+	log, ctx := logging.FromWithNameAndFields(ctx, "eventindex", zap.String("event", string(e.ID)))
 	encoded, err := json.Marshal(&e)
 	if err != nil {
 		return err
 	}
-	return index.db.Update(func(tx *bolt.Tx) error {
+	err = index.db.Update(func(tx *bolt.Tx) error {
+		log.Info("Updating event", zap.Int("nbPhotos", len(photos)))
 		if err := tx.Bucket(eventsBucket).Put([]byte(e.ID), encoded); err != nil {
 			return err
 		}
@@ -69,12 +73,16 @@ func (index *EventIndex) AddPhotosToEvent(ctx context.Context, e Event, photos [
 			return err
 		}
 		for _, p := range photos {
-			if err := b.Put([]byte(p), []byte(p)); err != nil {
+			if err := b.Put([]byte(p.SortID), []byte(p.ID)); err != nil {
 				return err
 			}
 		}
 		return nil
 	})
+	if err != nil {
+		log.Warn("Event update failed", zap.Error(err))
+	}
+	return err
 }
 
 func (index *EventIndex) FindPaged(ctx context.Context, start, maxCount int) (events []Event, hasMore bool, err error) {

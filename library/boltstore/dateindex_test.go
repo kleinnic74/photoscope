@@ -33,7 +33,9 @@ func TestDateIndexFindDates(t *testing.T) {
 			}
 			for _, ts := range d.input {
 				photo := library.Photo{
-					ID:        library.PhotoID(fmt.Sprintf("%d", i)),
+					ExtendedPhotoID: library.ExtendedPhotoID{
+						ID: library.PhotoID(fmt.Sprintf("%d", i)),
+					},
 					DateTaken: ts,
 				}
 				dateindex.Add(context.Background(), &photo)

@@ -77,7 +77,7 @@ func (m DistanceClassifier) NoveltyScores(ssm [][]float64, kernelSize int) (scor
 		scores.Scores[i].Score = score
 		if i > 0 {
 			scores.Scores[i].Derivative = score - scores.Scores[i-1].Score
-			scores.Scores[i-1].Boundary = scores.Scores[i].Derivative < 0 && scores.Scores[i-1].Derivative > 0
+			scores.Scores[i-1].Boundary = scores.Scores[i].Derivative < 0 && scores.Scores[i-1].Derivative > 0 && scores.Scores[i-1].Score > 0.2
 		}
 		scores.Min = math.Min(scores.Min, score)
 		scores.Max = math.Max(scores.Max, score)

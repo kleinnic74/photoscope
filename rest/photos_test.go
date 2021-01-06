@@ -47,7 +47,9 @@ type testLib struct {
 
 func (lib *testLib) Add(ctx context.Context, p domain.Photo, content io.Reader) error {
 	lib.photos = append(lib.photos, &library.Photo{
-		ID:        library.PhotoID(p.ID()),
+		ExtendedPhotoID: library.ExtendedPhotoID{
+			ID: library.PhotoID(p.ID()),
+		},
 		Path:      p.Name(),
 		DateTaken: p.DateTaken(),
 		Format:    p.Format(),

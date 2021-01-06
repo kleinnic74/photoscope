@@ -10,7 +10,7 @@ export default class Events extends Component {
         return (
             <div>
                 <ul>
-                    {this.props.events.map(e => 
+                    {this.props.events?.map(e => 
                         <li key={e.id} onClick={ev => this.props.onEventSelected(e.id)}>{e.id}</li>)}
                 </ul>
             </div>

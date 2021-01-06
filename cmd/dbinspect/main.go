@@ -23,12 +23,18 @@ var (
 
 	exe command
 
+	args []string
+
 	printKey   bool
 	printValue bool
 	keyFilter  string
 
 	commands = []command{
-		{"buckets", listBuckets, func() *flag.FlagSet { return nil }, true},
+		{"buckets", listBuckets, func() *flag.FlagSet {
+			flags := flag.NewFlagSet("buckets", flag.ExitOnError)
+			flags.StringVar(&bucket, "b", "", "Bucket to inspect")
+			return flags
+		}, true},
 		{"entries", listEntries, func() *flag.FlagSet {
 			cmdEntries := flag.NewFlagSet("entries", flag.ExitOnError)
 			cmdEntries.StringVar(&bucket, "b", "photos", "Bucket to inspect")
@@ -38,12 +44,13 @@ var (
 			return cmdEntries
 		}, true},
 		{"delete", deleteEntries, func() *flag.FlagSet { return nil }, false},
+		{"deleteBucket", deleteBucket, func() *flag.FlagSet { return nil }, false},
 	}
 )
 
 func getCommand(args []string) (command, *flag.FlagSet, error) {
 	if len(args) == 0 {
-		return command{}, nil, fmt.Errorf("Missing argument")
+		return commands[0], commands[0].flags(), nil
 	}
 	for i := range commands {
 		if args[0] == commands[i].name {
@@ -55,7 +62,11 @@ func getCommand(args []string) (command, *flag.FlagSet, error) {
 
 func init() {
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s  [options]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s [command] [options]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "[command] is one of\n")
+		for _, c := range commands {
+			fmt.Fprintf(os.Stderr, "\t%s\n", c.name)
+		}
 		flag.PrintDefaults()
 	}
 	flag.StringVar(&libDir, "l", "gophotos", "Path to photo library")
@@ -70,10 +81,13 @@ func init() {
 		flag.Usage()
 		os.Exit(1)
 	}
-	args := flag.Args()[1:]
+	if flag.NArg() > 0 {
+		args = flag.Args()[1:]
+	}
 	fmt.Fprintf(os.Stderr, "executing: %s [args=%s] [exe=%v]\n", exe.name, args, exe)
 	if flags != nil {
 		flags.Parse(args)
+		args = flags.Args()
 	}
 }
 
@@ -88,10 +102,35 @@ type command struct {
 }
 
 func listBuckets(tx *bolt.Tx) error {
-	return tx.ForEach(func(name []byte, bucket *bolt.Bucket) error {
-		fmt.Fprintln(os.Stdout, string(name))
-		return nil
-	})
+	if bucket != "" {
+		return tx.Bucket([]byte(bucket)).ForEach(func(k, v []byte) error {
+			if v == nil {
+				fmt.Fprintln(os.Stdout, string(k))
+			}
+			return nil
+		})
+	} else {
+		return tx.ForEach(func(name []byte, bucket *bolt.Bucket) error {
+			fmt.Fprintln(os.Stdout, string(name))
+			return nil
+		})
+	}
+}
+
+func deleteBucket(tx *bolt.Tx) (err error) {
+	for _, b := range args {
+		if bucket != "" {
+			fmt.Fprintf(os.Stderr, "Deleting subbucket %s/%s", bucket, b)
+			err = tx.Bucket([]byte(bucket)).DeleteBucket([]byte(b))
+		} else {
+			fmt.Fprintf(os.Stderr, "Deleting bucket %s", b)
+			err = tx.DeleteBucket([]byte(b))
+		}
+		if err != nil {
+			return
+		}
+	}
+	return
 }
 
 type stats struct {

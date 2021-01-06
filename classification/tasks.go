@@ -47,14 +47,14 @@ func (t *SplitEventTask) Execute(ctx context.Context, executor tasks.TaskExecuto
 	if err != nil {
 		return err
 	}
-	group := make([]library.PhotoID, 0)
+	group := make([]library.ExtendedPhotoID, 0)
 	var last time.Time
 	for _, p := range photos {
 		if p.DateTaken.Sub(last) > t.threshold && len(group) > 1 {
 			executor.Submit(ctx, newIdentifyEventsTask(t.index, group))
-			group = make([]library.PhotoID, 0)
+			group = make([]library.ExtendedPhotoID, 0)
 		}
-		group = append(group, p.ID)
+		group = append(group, p.ExtendedPhotoID)
 		last = p.DateTaken
 	}
 	if len(group) > 0 {
@@ -66,10 +66,10 @@ func (t *SplitEventTask) Execute(ctx context.Context, executor tasks.TaskExecuto
 // IdentifyEventsTask is a task that will identify temporal events within a group a photos and store each such event in the event index
 type IdentifyEventsTask struct {
 	index  *boltstore.EventIndex
-	Photos []library.PhotoID `json:"photos,omitempty"`
+	Photos []library.ExtendedPhotoID `json:"photos,omitempty"`
 }
 
-func newIdentifyEventsTask(eventIndex *boltstore.EventIndex, photos []library.PhotoID) tasks.Task {
+func newIdentifyEventsTask(eventIndex *boltstore.EventIndex, photos []library.ExtendedPhotoID) tasks.Task {
 	return &IdentifyEventsTask{index: eventIndex, Photos: photos}
 }
 
@@ -80,12 +80,12 @@ func (t *IdentifyEventsTask) Describe() string {
 type sortedPhotos struct {
 	ctx context.Context
 	lib library.PhotoLibrary
-	ids []library.PhotoID
+	ids []library.ExtendedPhotoID
 }
 
 func (s *sortedPhotos) Len() int { return len(s.ids) }
 func (s *sortedPhotos) Get(i int) time.Time {
-	p, _ := s.lib.Get(s.ctx, s.ids[i])
+	p, _ := s.lib.Get(s.ctx, s.ids[i].ID)
 	return p.DateTaken
 }
 

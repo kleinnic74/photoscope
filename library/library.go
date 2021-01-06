@@ -121,9 +121,11 @@ func (lib *BasicPhotoLibrary) Add(ctx context.Context, photo domain.Photo, conte
 	}
 	path := filepath.Join(targetDir, name)
 	p := &Photo{
-		Path:        path,
-		ID:          id,
-		SortID:      orderedID,
+		Path: path,
+		ExtendedPhotoID: ExtendedPhotoID{
+			ID:     id,
+			SortID: orderedID,
+		},
 		DateTaken:   photo.DateTaken().UTC(),
 		Location:    photo.Location(),
 		Format:      photo.Format(),
@@ -325,7 +327,10 @@ func (lib *BasicPhotoLibrary) MigrateInstances(ctx context.Context, progress fun
 		}
 
 		if updated.schema != p.schema {
-			logger.Info("Photo migrated", zap.String("photo", string(p.ID)))
+			logger.Info("Photo migrated", zap.String("photo", string(updated.ID)),
+				zap.Int("pre_schema", int(p.schema)),
+				zap.Int("new_schema", int(updated.schema)),
+				zap.Any("content", updated))
 			lib.db.Update(&updated)
 			count++
 		}
@@ -381,8 +386,10 @@ func addOrientation(ctx context.Context, p Photo, in ReaderFunc) (Photo, error) 
 }
 
 func addSortID(ctx context.Context, p Photo, in ReaderFunc) (Photo, error) {
+	log, ctx := logging.SubFrom(ctx, "addSortID")
 	if len(p.SortID) == 0 {
 		p.SortID = orderedIDOf(p.DateTaken.UTC(), p.ID)
+		log.Debug("Added sortID", zap.String("photo", string(p.ID)), zap.Int("sortIDSize", len(p.SortID)))
 	}
 	return p, nil
 }
@@ -392,6 +399,6 @@ func instanceMigrations() InstanceMigrations {
 	migrations.Register(Version(1), InstanceFunc(migratePath))
 	migrations.Register(Version(1), InstanceFunc(addOrientation))
 	migrations.Register(Version(3), InstanceFunc(migrateHash))
-	migrations.Register(Version(4), InstanceFunc(addSortID))
+	migrations.Register(Version(6), InstanceFunc(addSortID))
 	return migrations
 }

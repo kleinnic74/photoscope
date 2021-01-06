@@ -16,6 +16,11 @@ type PhotoID string
 // OrderedID is an ID whose values can be sorted based on time
 type OrderedID []byte
 
+type ExtendedPhotoID struct {
+	ID     PhotoID   `json:"id"`
+	SortID OrderedID `json:"sortId,omitempty"`
+}
+
 type AsendingOrderedIDs []OrderedID
 
 func (a AsendingOrderedIDs) Len() int           { return len(a) }

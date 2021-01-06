@@ -41,7 +41,9 @@ func TestMarshallJSON(t *testing.T) {
 	}{
 		{
 			Photo: Photo{
-				ID:        "id",
+				ExtendedPhotoID: ExtendedPhotoID{
+					ID: "id",
+				},
 				Path:      "to/file",
 				Format:    domain.MustFormatForExt("jpg"),
 				Location:  gps.MustNewCoordinates(12, 34),

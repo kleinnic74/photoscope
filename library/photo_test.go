@@ -11,27 +11,43 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestPhotoJSONMarshalling(t *testing.T) {
-	data := []struct {
-		json  string
-		photo Photo
-	}{
-		{`{"schema":1,"id":"123","or":4,"format":"jpg"}`, Photo{schema: 1, ID: "123", Orientation: 4, Format: domain.MustFormatForExt("jpg")}},
-	}
-	for i, d := range data {
+var photoData = []struct {
+	json  string
+	photo Photo
+}{
+	{fmt.Sprintf(`{"id":"123","sortId":"AQIDBA==","schema":%d,"format":"jpg","dateUN":1573148532000000000,"or":4}`, currentSchema),
+		Photo{schema: currentSchema,
+			ExtendedPhotoID: ExtendedPhotoID{ID: "123", SortID: []byte{1, 2, 3, 4}},
+			Orientation:     4,
+			Format:          domain.MustFormatForExt("jpg"),
+			DateTaken:       time.Date(2019, 11, 07, 17, 42, 12, 0, time.UTC),
+		}},
+}
+
+func TestPhotoJSONUnmarshal(t *testing.T) {
+	for i, d := range photoData {
 		name := fmt.Sprintf("#%d:", i)
 		t.Run(name, func(t *testing.T) {
-			unmarshall(t, d.json, d.photo)
+			var actual Photo
+			if err := json.Unmarshal([]byte(d.json), &actual); err != nil {
+				t.Fatalf("Failed to decode JSON: %s", err)
+			}
+			assert.Equal(t, d.photo, actual)
 		})
 	}
 }
 
-func unmarshall(t *testing.T, data string, expected Photo) {
-	var actual Photo
-	if err := json.Unmarshal([]byte(data), &actual); err != nil {
-		t.Fatalf("Failed to decode JSON: %s", err)
+func TestPhotoJSONMarshal(t *testing.T) {
+	for i, d := range photoData {
+		name := fmt.Sprintf("#%d:", i)
+		t.Run(name, func(t *testing.T) {
+			encoded, err := json.Marshal(&d.photo)
+			if err != nil {
+				t.Fatalf("Failed to marshal to JSON: %s", err)
+			}
+			assert.Equal(t, d.json, string(encoded))
+		})
 	}
-	assert.Equal(t, expected, actual)
 }
 
 func TestByteOrderOfId(t *testing.T) {
