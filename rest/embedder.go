@@ -16,7 +16,7 @@ func Embedder() http.Handler {
 		}
 		res, err := embed.GetResource(path)
 		if err != nil {
-			respondWithError(w, http.StatusNotFound, err)
+			compact.WithError(w, http.StatusNotFound, err)
 			return
 		}
 		w.Header().Set("Content-Type", res.Type)

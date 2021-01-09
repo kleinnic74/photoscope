@@ -31,12 +31,13 @@ type date string
 
 func (dates *TimelineHandler) getTimelineForward(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	responder := Respond(r)
 	c := cursor.DecodeFromRequest(r)
 	from := parseDateOrDefault(r.FormValue("from"), time.Time{})
 	to := parseDateOrDefault(r.FormValue("to"), time.Now())
 	ids, hasMore, err := dates.index.FindRangePaged(ctx, from, to, c.Start, c.PageSize)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, err)
+		responder.WithError(w, http.StatusInternalServerError, err)
 		return
 	}
 	var photoViews []views.Photo
@@ -45,17 +46,18 @@ func (dates *TimelineHandler) getTimelineForward(w http.ResponseWriter, r *http.
 			photoViews = append(photoViews, views.PhotoFrom(p))
 		}
 	}
-	respondWithJSON(w, http.StatusOK, cursor.PageFor(photoViews, c, hasMore))
+	responder.WithJSON(w, http.StatusOK, cursor.PageFor(photoViews, c, hasMore))
 }
 
 func (dates *TimelineHandler) getTimelineIndex(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	responder := Respond(r)
 	keys, err := dates.index.Keys(ctx)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, err)
+		responder.WithError(w, http.StatusInternalServerError, err)
 		return
 	}
-	respondWithJSON(w, http.StatusOK, keys)
+	responder.WithJSON(w, http.StatusOK, keys)
 }
 
 func parseDateOrDefault(date string, d time.Time) time.Time {

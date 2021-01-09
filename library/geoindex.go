@@ -20,7 +20,7 @@ type GeoIndex interface {
 
 	Has(context.Context, PhotoID) bool
 	Get(context.Context, PhotoID) (*gps.Address, bool, error)
-	Update(context.Context, PhotoID, *gps.Address) error
+	Update(context.Context, ExtendedPhotoID, *gps.Address) error
 
 	Locations(context.Context) (*Locations, error)
 	FindByPlacePaged(context.Context, gps.PlaceID, int, int) ([]PhotoID, bool, error)

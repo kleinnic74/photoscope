@@ -69,6 +69,10 @@ func (indexer *Indexer) GetMissingIndexes(id library.PhotoID) ([]Name, error) {
 	return indexer.tracker.GetMissingIndexes(id)
 }
 
+func (indexer *Indexer) GetElementStatus(ctx context.Context) ([]ElementState, error) {
+	return indexer.tracker.GetElementStatus(ctx)
+}
+
 func (indexer *Indexer) indexDeferred(ctx context.Context, photo *library.Photo, name Name) {
 	delegate, found := indexer.indexers[name]
 	if !found {

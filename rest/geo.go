@@ -32,12 +32,13 @@ func (g *GeoHandler) InitRoutes(r *mux.Router) {
 }
 
 func (g *GeoHandler) getGeoIndex(w http.ResponseWriter, r *http.Request) {
+	responder := Respond(r)
 	locations, err := g.index.Locations(r.Context())
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, err)
+		responder.WithError(w, http.StatusInternalServerError, err)
 		return
 	}
-	respondWithJSON(w, http.StatusOK, locations)
+	responder.WithJSON(w, http.StatusOK, locations)
 }
 
 func (g *GeoHandler) getPhotosByPlace(w http.ResponseWriter, r *http.Request) {
@@ -45,9 +46,10 @@ func (g *GeoHandler) getPhotosByPlace(w http.ResponseWriter, r *http.Request) {
 	c := cursor.DecodeFromRequest(r)
 	vars := mux.Vars(r)
 	placeID := gps.PlaceID(vars["placeID"])
+	responder := Respond(r)
 	photos, hasMore, err := g.index.FindByPlacePaged(ctx, placeID, c.Start, c.PageSize)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, err)
+		responder.WithError(w, http.StatusInternalServerError, err)
 		return
 	}
 	var v []views.Photo
@@ -58,17 +60,18 @@ func (g *GeoHandler) getPhotosByPlace(w http.ResponseWriter, r *http.Request) {
 			log.Warn("Unknown photo referenced in geoindex", zap.String("id", string(p)))
 		}
 	}
-	respondWithJSON(w, http.StatusOK, cursor.PageFor(v, c, hasMore))
+	responder.WithJSON(w, http.StatusOK, cursor.PageFor(v, c, hasMore))
 }
 
 func (g *GeoHandler) getPhotosByCountry(w http.ResponseWriter, r *http.Request) {
 	log, ctx := logging.SubFrom(r.Context(), "geo")
 	c := cursor.DecodeFromRequest(r)
 	vars := mux.Vars(r)
+	responder := Respond(r)
 	countryID := gps.CountryID(vars["countryID"])
 	photos, hasMore, err := g.index.FindByCountryPaged(ctx, countryID, c.Start, c.PageSize)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, err)
+		responder.WithError(w, http.StatusInternalServerError, err)
 		return
 	}
 	var v []views.Photo
@@ -79,7 +82,7 @@ func (g *GeoHandler) getPhotosByCountry(w http.ResponseWriter, r *http.Request) 
 			log.Warn("Unknown photo referenced in geoindex", zap.String("id", string(p)))
 		}
 	}
-	respondWithJSON(w, http.StatusOK, cursor.PageFor(v, c, hasMore))
+	responder.WithJSON(w, http.StatusOK, cursor.PageFor(v, c, hasMore))
 }
 
 type GeoCacheHandler struct {
@@ -96,7 +99,7 @@ func (g *GeoCacheHandler) InitRoutes(r *mux.Router) {
 }
 
 func (g *GeoCacheHandler) getGeoCache(w http.ResponseWriter, r *http.Request) {
-	respondWithJSON(w, http.StatusOK, g.cache.DumpStats())
+	Respond(r).WithJSON(w, http.StatusOK, g.cache.DumpStats())
 }
 
 func (g *GeoCacheHandler) renderSvg(w http.ResponseWriter, r *http.Request) {

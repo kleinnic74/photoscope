@@ -63,7 +63,7 @@ export default class FilterSelector extends Component {
 
     refreshEvents() {
         axios.get(this.props.baseURL+'/events', {
-            params: { p: 100 }
+            params: { p: 1000 }
         })
             .then(response => response.data)
             .then(data => {

@@ -178,7 +178,7 @@ func main() {
 	events := rest.NewEventsHandler(eventindex, lib)
 	events.InitRoutes(router)
 
-	indexesRest := rest.NewIndexes(migrator)
+	indexesRest := rest.NewIndexes(indexer, migrator)
 	indexesRest.Init(router)
 
 	tmpdir := filepath.Join(libDir, "tmp")

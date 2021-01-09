@@ -14,7 +14,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const GeoIndexVersion = library.Version(5)
+const GeoIndexVersion = library.Version(11)
 
 type boltGeoIndex struct {
 	db *bolt.DB
@@ -58,12 +58,39 @@ func (idx *boltGeoIndex) MigrateStructure(ctx context.Context, from library.Vers
 	migrations.Register(library.Version(3), index.StructuralMigrationFunc(idx.deleteLegacyBuckets))
 	migrations.Register(library.Version(4), index.ForceReindex)
 	migrations.Register(library.Version(5), index.ForceReindex)
-	reindex, err := migrations.Apply(from, GeoIndexVersion)
+	migrations.Register(library.Version(11), idx.resetBuckets(placeOfPhotos, photosByPlace, allCountriesBucket, placesByCountryBucket))
+	reindex, err := migrations.Apply(ctx, from, GeoIndexVersion)
 	return GeoIndexVersion, reindex, err
 }
 
-func (idx *boltGeoIndex) deleteLegacyBuckets() (bool, error) {
+func (idx *boltGeoIndex) deleteLegacyBuckets(ctx context.Context) (bool, error) {
 	return true, deleteBuckets(idx.db, "photoplaces", "photosByPlace", "allcountries", "placesByCountry")
+}
+
+func (idx *boltGeoIndex) resetBuckets(buckets ...[]byte) index.StructuralMigration {
+	return index.StructuralMigrationFunc(func(ctx context.Context) (bool, error) {
+		log, ctx := logging.SubFrom(ctx, "resetBuckets")
+		log.Debug("Resetting buckets...")
+		tx, err := idx.db.Begin(true)
+		if err != nil {
+			return false, err
+		}
+		for _, b := range buckets {
+			log.Info("Re-creating bucket", zap.String("bucket", string(b)))
+			if tx.Bucket(b) != nil {
+				if err := tx.DeleteBucket(b); err != nil {
+					return false, err
+				}
+				log.Info("Deleted old bucket", zap.String("bucket", string(b)))
+			}
+			if _, err := tx.CreateBucketIfNotExists(b); err != nil {
+				return false, err
+			}
+			log.Info("Re-created bucket", zap.String("bucket", string(b)))
+		}
+		log.Debug("Done")
+		return true, tx.Commit()
+	})
 }
 
 func (idx *boltGeoIndex) Has(ctx context.Context, id library.PhotoID) (exists bool) {
@@ -97,7 +124,7 @@ func (idx *boltGeoIndex) Get(ctx context.Context, id library.PhotoID) (address *
 	return
 }
 
-func (idx *boltGeoIndex) Update(ctx context.Context, id library.PhotoID, address *gps.Address) error {
+func (idx *boltGeoIndex) Update(ctx context.Context, id library.ExtendedPhotoID, address *gps.Address) error {
 	if address == nil {
 		return nil
 	}
@@ -107,7 +134,7 @@ func (idx *boltGeoIndex) Update(ctx context.Context, id library.PhotoID, address
 	}
 	return idx.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket(placeOfPhotos)
-		if err := b.Put([]byte(id), encodedAddress); err != nil {
+		if err := b.Put([]byte(id.ID), encodedAddress); err != nil {
 			return err
 		}
 		allCountries := tx.Bucket(allCountriesBucket)
@@ -135,7 +162,7 @@ func (idx *boltGeoIndex) Update(ctx context.Context, id library.PhotoID, address
 		if err != nil {
 			return err
 		}
-		return photosAtPlace.Put([]byte(id), []byte(id))
+		return photosAtPlace.Put([]byte(id.SortID), []byte(id.ID))
 	})
 }
 
@@ -179,7 +206,7 @@ func (idx *boltGeoIndex) FindByPlacePaged(ctx context.Context, placeID gps.Place
 		c := sub.Cursor()
 		var index int
 		var count int
-		for k, _ := c.First(); k != nil; k, _ = c.Next() {
+		for k, v := c.First(); k != nil; k, v = c.Next() {
 			if index < startAt {
 				index++
 				continue
@@ -188,7 +215,7 @@ func (idx *boltGeoIndex) FindByPlacePaged(ctx context.Context, placeID gps.Place
 				hasMore = true
 				return nil
 			}
-			photos = append(photos, library.PhotoID(k))
+			photos = append(photos, library.PhotoID(v))
 			count++
 		}
 		return nil
@@ -209,7 +236,7 @@ func (idx *boltGeoIndex) FindByCountryPaged(ctx context.Context, country gps.Cou
 				continue
 			}
 			c := sub.Cursor()
-			for k, _ := c.First(); k != nil; k, _ = c.Next() {
+			for k, v := c.First(); k != nil; k, v = c.Next() {
 				if index < startAt {
 					index++
 					continue
@@ -218,7 +245,7 @@ func (idx *boltGeoIndex) FindByCountryPaged(ctx context.Context, country gps.Cou
 					hasMore = true
 					return nil
 				}
-				photos = append(photos, library.PhotoID(k))
+				photos = append(photos, library.PhotoID(v))
 				count++
 			}
 		}

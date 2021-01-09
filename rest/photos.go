@@ -47,9 +47,10 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) getPhotos(w http.ResponseWriter, r *http.Request) {
 	c := cursor.DecodeFromRequest(r)
+	responder := Respond(r)
 	photos, hasMore, err := a.lib.FindAllPaged(r.Context(), c.Start, c.PageSize, c.Order)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, err)
+		responder.WithError(w, http.StatusInternalServerError, err)
 		return
 	}
 	logging.From(r.Context()).Named("http").Info("/photos",
@@ -58,34 +59,36 @@ func (a *App) getPhotos(w http.ResponseWriter, r *http.Request) {
 	for i, p := range photos {
 		photoViews[i] = views.PhotoFrom(p)
 	}
-	respondWithJSON(w, http.StatusOK, cursor.PageFor(photoViews, c, hasMore))
+	responder.WithJSON(w, http.StatusOK, cursor.PageFor(photoViews, c, hasMore))
 }
 
 func (a *App) getPhoto(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := library.PhotoID(vars["id"])
+	responder := Respond(r)
 	photo, err := a.lib.Get(r.Context(), id)
 	if photo == nil && err == nil {
-		respondWithError(w, http.StatusNotFound, fmt.Errorf("No photo with id %s", id))
+		responder.WithError(w, http.StatusNotFound, fmt.Errorf("No photo with id %s", id))
 		return
 	}
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, err)
+		responder.WithError(w, http.StatusInternalServerError, err)
 		return
 	}
-	respondWithJSON(w, http.StatusOK, photo)
+	responder.WithJSON(w, http.StatusOK, photo)
 }
 
 func (a *App) getPhotoImage(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := library.PhotoID(vars["id"])
+	responder := Respond(r)
 	binary, photo, err := a.lib.OpenContent(r.Context(), id)
 	if binary == nil && err == nil {
-		respondWithError(w, http.StatusNotFound, fmt.Errorf("No photo with id %s", id))
+		responder.WithError(w, http.StatusNotFound, fmt.Errorf("No photo with id %s", id))
 		return
 	}
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, err)
+		responder.WithError(w, http.StatusInternalServerError, err)
 		return
 	}
 	defer binary.Close()
@@ -95,16 +98,17 @@ func (a *App) getPhotoImage(w http.ResponseWriter, r *http.Request) {
 func (a *App) getThumb(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := library.PhotoID(vars["id"])
+	responder := Respond(r)
 	thumb, format, err := a.lib.OpenThumb(r.Context(), id, domain.Small)
 	if err != nil {
 		switch err.(type) {
 		case library.ErrNotFound:
-			respondWithError(w, http.StatusNotFound, fmt.Errorf("No photo with id %s", id))
+			responder.WithError(w, http.StatusNotFound, fmt.Errorf("No photo with id %s", id))
 		case domain.ErrThumbsNotSupported:
-			respondWithError(w, http.StatusNotImplemented, err)
+			responder.WithError(w, http.StatusNotImplemented, err)
 		default:
 			logging.From(r.Context()).Error("Internal error", zap.Error(err))
-			respondWithError(w, http.StatusInternalServerError, err)
+			responder.WithError(w, http.StatusInternalServerError, err)
 		}
 		return
 	}

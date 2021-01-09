@@ -97,17 +97,20 @@ func (c *MigrationCoordinator) Migrate(ctx context.Context, progress func(int, i
 	logger.Info("Migrating structures")
 	for name, s := range c.structures {
 		currentState := c.versions[name]
+		log, ctx := logging.FromWithFields(ctx, zap.String("index", string(name)), zap.Uint("currentVersion", uint(currentState.Version)))
+		log.Info("Begin migration")
 		nextVersion, reindex, err := s.MigrateStructure(ctx, currentState.Version)
 		if err != nil {
-			logger.Warn("Migration failed", zap.Stringer("index", name), zap.Error(err))
+			log.Warn("Migration failed", zap.Stringer("index", name), zap.Error(err))
 		}
 		if reindex {
 			needReindexing = append(needReindexing, name)
 		}
 		currentState.Version = nextVersion
 		if err := c.updateState(ctx, name, currentState); err != nil {
-			logger.Warn("Error while storing index status", zap.Stringer("index", name), zap.Error(err))
+			log.Warn("Error while storing index status", zap.Stringer("index", name), zap.Error(err))
 		}
+		log.Info("migrated", zap.Uint("migratedVersion", uint(currentState.Version)))
 	}
 	logger.Info("Migrating instances")
 	for _, i := range c.instances {
@@ -133,17 +136,18 @@ func (c *MigrationCoordinator) updateState(ctx context.Context, name Name, state
 
 // StructuralMigration migrates the structure of the underlying datastore
 type StructuralMigration interface {
-	Apply() (bool, error)
+	// Apply applies the structural migration and returns a boolean indicating if reindexing is required
+	Apply(ctx context.Context) (bool, error)
 }
 
-type StructuralMigrationFunc func() (bool, error)
+type StructuralMigrationFunc func(ctx context.Context) (bool, error)
 
-func (m StructuralMigrationFunc) Apply() (bool, error) {
-	return m()
+func (m StructuralMigrationFunc) Apply(ctx context.Context) (bool, error) {
+	return m(ctx)
 }
 
 // ForceReindex is a structural migration doing nothing except forcing to reindex all instances
-var ForceReindex = StructuralMigrationFunc(func() (bool, error) { return true, nil })
+var ForceReindex = StructuralMigrationFunc(func(context.Context) (bool, error) { return true, nil })
 
 // StructucalMigrations are a collection of migrations to be applied to a given data store
 type StructuralMigrations map[library.Version][]StructuralMigration
@@ -156,15 +160,17 @@ func (migrations StructuralMigrations) Register(targetVersion library.Version, m
 	migrations[targetVersion] = append(migrations[targetVersion], m)
 }
 
-func (migrations StructuralMigrations) Apply(current library.Version, target library.Version) (reindex bool, err error) {
+func (migrations StructuralMigrations) Apply(ctx context.Context, current library.Version, target library.Version) (reindex bool, err error) {
+	_, ctx = logging.SubFrom(ctx, "structural")
 	for current < target {
-		for _, m := range migrations[current] {
-			reindex, err = m.Apply()
-			if err != nil {
-				return
-			}
-		}
 		current++
+		for _, m := range migrations[current] {
+			needsReindexing, err := m.Apply(ctx)
+			if err != nil {
+				return false, err
+			}
+			reindex = reindex || needsReindexing
+		}
 	}
 	return
 }

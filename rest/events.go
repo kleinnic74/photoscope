@@ -31,24 +31,26 @@ func (h *EventsHandler) InitRoutes(r *mux.Router) {
 
 func (h *EventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 	page := cursor.DecodeFromRequest(r)
+	responder := Respond(r)
 	e, hasMore, err := h.events.FindPaged(r.Context(), page.Start, page.PageSize)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, err)
+		responder.WithError(w, http.StatusInternalServerError, err)
 		return
 	}
-	respondWithJSON(w, http.StatusOK, cursor.PageFor(e, page, hasMore))
+	responder.WithJSON(w, http.StatusOK, cursor.PageFor(e, page, hasMore))
 }
 
 func (h *EventsHandler) photosForEvent(w http.ResponseWriter, r *http.Request) {
+	responder := Respond(r)
 	eventID, ok := mux.Vars(r)["id"]
 	if !ok {
-		respondWithError(w, http.StatusBadRequest, errorNoID)
+		responder.WithError(w, http.StatusBadRequest, errorNoID)
 		return
 	}
 	page := cursor.DecodeFromRequest(r)
 	photoIDs, hasMore, err := h.events.FindPhotosPaged(r.Context(), eventID, page.Start, page.PageSize)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, err)
+		responder.WithError(w, http.StatusInternalServerError, err)
 		return
 	}
 	v := make([]views.Photo, len(photoIDs))
@@ -57,5 +59,5 @@ func (h *EventsHandler) photosForEvent(w http.ResponseWriter, r *http.Request) {
 			v[i] = views.PhotoFrom(photo)
 		}
 	}
-	respondWithJSON(w, http.StatusOK, cursor.PageFor(v, page, hasMore))
+	responder.WithJSON(w, http.StatusOK, cursor.PageFor(v, page, hasMore))
 }

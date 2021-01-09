@@ -10,14 +10,47 @@ import (
 	"bitbucket.org/kleinnic74/photos/domain"
 )
 
-func respondWithError(w http.ResponseWriter, status int, err error) {
-	respondWithJSON(w, status, map[string]string{"error": err.Error()})
+var ()
+
+type Responder interface {
+	WithJSON(http.ResponseWriter, int, interface{})
+	WithError(http.ResponseWriter, int, error)
 }
 
-func respondWithJSON(w http.ResponseWriter, status int, payload interface{}) {
+type encoderFunc func(*json.Encoder) *json.Encoder
+
+type responder struct {
+	encoderOptions encoderFunc
+}
+
+var (
+	pretty  Responder
+	compact Responder
+)
+
+func init() {
+	pretty = responder{func(encoder *json.Encoder) *json.Encoder {
+		encoder.SetIndent("", "  ")
+		return encoder
+	}}
+	compact = responder{func(e *json.Encoder) *json.Encoder { return e }}
+}
+
+func Respond(r *http.Request) Responder {
+	if r.URL.Query().Get("pretty") == "true" {
+		return pretty
+	}
+	return compact
+}
+
+func (r responder) WithError(w http.ResponseWriter, status int, err error) {
+	r.WithJSON(w, status, map[string]string{"error": err.Error()})
+}
+
+func (r responder) WithJSON(w http.ResponseWriter, status int, payload interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	encoder := json.NewEncoder(w)
+	encoder := r.encoderOptions(json.NewEncoder(w))
 	encoder.Encode(payload)
 }
 

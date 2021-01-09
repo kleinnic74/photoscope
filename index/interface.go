@@ -1,6 +1,7 @@
 package index
 
 import (
+	"context"
 	"encoding/json"
 
 	"bitbucket.org/kleinnic74/photos/library"
@@ -60,9 +61,15 @@ func (s State) Set(index Name, status Status, version library.Version) {
 	s[index] = IndexStatus{status, version}
 }
 
+type ElementState struct {
+	ID    library.PhotoID `json:"id"`
+	State State           `json:"state,omitempty"`
+}
+
 type Tracker interface {
 	RegisterIndex(Name, library.Version)
 	Update(Name, library.PhotoID, error) error
 	Get(library.PhotoID) (State, bool, error)
 	GetMissingIndexes(library.PhotoID) ([]Name, error)
+	GetElementStatus(context.Context) ([]ElementState, error)
 }

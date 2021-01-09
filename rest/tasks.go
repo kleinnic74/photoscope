@@ -28,7 +28,7 @@ func (h *TaskHandler) InitRoutes(r *mux.Router) {
 
 func (h *TaskHandler) getTaskDefinitions(w http.ResponseWriter, r *http.Request) {
 	defined := h.tasks.DefinedTasks()
-	respondWithJSON(w, http.StatusOK, &simplePayload{Data: defined})
+	Respond(r).WithJSON(w, http.StatusOK, &simplePayload{Data: defined})
 }
 
 type task struct {
@@ -37,22 +37,23 @@ type task struct {
 }
 
 func (h *TaskHandler) postTask(w http.ResponseWriter, r *http.Request) {
+	responder := Respond(r)
 	task, err := parseTask(h.tasks, r.Body)
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, err)
+		responder.WithError(w, http.StatusBadRequest, err)
 		return
 	}
 	execution, err := h.executor.Submit(r.Context(), task)
 	if err != nil {
-		respondWithError(w, http.StatusServiceUnavailable, err)
+		responder.WithError(w, http.StatusServiceUnavailable, err)
 	}
-	respondWithJSON(w, http.StatusAccepted, execution)
+	responder.WithJSON(w, http.StatusAccepted, execution)
 }
 
 func (h *TaskHandler) listTasks(w http.ResponseWriter, r *http.Request) {
 	t := h.executor.ListTasks(r.Context())
 	sort.Sort(tasks.ExecutionsBySubmission(t))
-	respondWithJSON(w, http.StatusOK, cursor.Unpaged(t))
+	Respond(r).WithJSON(w, http.StatusOK, cursor.Unpaged(t))
 }
 
 func parseTask(repo *tasks.TaskRepository, in io.Reader) (t tasks.Task, err error) {

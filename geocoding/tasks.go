@@ -11,7 +11,6 @@ import (
 	"go.uber.org/zap"
 )
 
-
 func RegisterTasks(repo *tasks.TaskRepository, geocoder *Geocoder) {
 	repo.Register("geoResolve", func() tasks.Task {
 		return NewGeoLookupTask(geocoder)
@@ -19,8 +18,8 @@ func RegisterTasks(repo *tasks.TaskRepository, geocoder *Geocoder) {
 }
 
 type geoLookupTask struct {
-	PhotoID  library.PhotoID `json:"photoID"`
-	Coords   gps.Coordinates `json:"gps"`
+	PhotoID  library.ExtendedPhotoID `json:"photoID"`
+	Coords   gps.Coordinates         `json:"gps"`
 	geocoder *Geocoder
 }
 
@@ -28,7 +27,7 @@ func NewGeoLookupTask(geocoder *Geocoder) tasks.Task {
 	return geoLookupTask{geocoder: geocoder}
 }
 
-func NewGeoLookupTaskWith(g *Geocoder, id library.PhotoID, coords gps.Coordinates) tasks.Task {
+func NewGeoLookupTaskWith(g *Geocoder, id library.ExtendedPhotoID, coords gps.Coordinates) tasks.Task {
 	return geoLookupTask{
 		PhotoID:  id,
 		Coords:   coords,

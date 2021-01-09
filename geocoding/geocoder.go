@@ -59,11 +59,11 @@ func (g *Geocoder) LookupPhotoOnAdd(ctx context.Context, p *library.Photo) (task
 	if p.Location == nil || !p.Location.IsValid() {
 		return nil, false
 	}
-	return NewGeoLookupTaskWith(g, p.ID, *p.Location), true
+	return NewGeoLookupTaskWith(g, p.ExtendedPhotoID, *p.Location), true
 }
 
-func (g *Geocoder) ResolveAndStoreLocation(ctx context.Context, p library.PhotoID, coords gps.Coordinates) error {
-	logger, ctx := logging.FromWithNameAndFields(ctx, "geocoder", zap.String("photo", string(p)))
+func (g *Geocoder) ResolveAndStoreLocation(ctx context.Context, p library.ExtendedPhotoID, coords gps.Coordinates) error {
+	logger, ctx := logging.FromWithNameAndFields(ctx, "geocoder", zap.String("photo", string(p.ID)))
 	logger.Info("Reverse geocoding", zap.Stringer("location", coords))
 	address, err := g.ReverseGeocode(ctx, coords.Lat, coords.Long)
 	if err != nil {

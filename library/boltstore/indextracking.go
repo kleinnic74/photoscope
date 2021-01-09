@@ -1,11 +1,14 @@
 package boltstore
 
 import (
+	"context"
 	"encoding/json"
 
 	"bitbucket.org/kleinnic74/photos/index"
 	"bitbucket.org/kleinnic74/photos/library"
+	"bitbucket.org/kleinnic74/photos/logging"
 	"github.com/boltdb/bolt"
+	"go.uber.org/zap"
 )
 
 var (
@@ -89,6 +92,24 @@ func (tracker *indexTracker) GetMissingIndexes(id library.PhotoID) (missing []in
 			}
 		}
 		return err
+	})
+	return
+}
+
+func (tracker *indexTracker) GetElementStatus(ctx context.Context) (state []index.ElementState, err error) {
+	log, ctx := logging.SubFrom(ctx, "indexTracker")
+	err = tracker.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(indexBucket)
+		return b.ForEach(func(k, v []byte) error {
+			indexingStatus := index.NewState()
+			if err := json.Unmarshal(v, &indexingStatus); err != nil {
+				log.Warn("Failed to JSON decode index statsu", zap.String("photo", string(library.PhotoID(k))), zap.Error(err))
+				return nil
+			}
+			s := index.ElementState{ID: library.PhotoID(k), State: indexingStatus}
+			state = append(state, s)
+			return nil
+		})
 	})
 	return
 }

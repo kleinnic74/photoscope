@@ -46,17 +46,22 @@ func init() {
 		}
 		cores = append(cores, zapcore.NewCore(jsonEncoder, errorFile, warnOrErrorFilter))
 	}
+	var fileFilter zap.LevelEnablerFunc
 	if devmode {
 		consoleEncoder := zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())
 		console := zapcore.Lock(os.Stdout)
 		cores = append(cores, zapcore.NewCore(consoleEncoder, console, debugFilter))
+		fileFilter = debugFilter
 	} else {
-		logfile, err := os.OpenFile("log.json", os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
-		if err != nil {
-			panic(fmt.Sprintf("Failed to open log file: %s", err))
-		}
-		cores = append(cores, zapcore.NewCore(jsonEncoder, logfile, infoFilter))
+		fileFilter = infoFilter
 	}
+
+	logfile, err := os.OpenFile("log.json", os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to open log file: %s", err))
+	}
+	cores = append(cores, zapcore.NewCore(jsonEncoder, zapcore.Lock(logfile), fileFilter))
+
 	rootLogger = zap.New(zapcore.NewTee(cores...))
 	rootLogger.With(zap.Bool("devmode", devmode)).Info("Logging initialized")
 }
