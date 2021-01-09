@@ -124,6 +124,7 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to initialize dataindex", zap.Error(err))
 	}
+	migrator.AddStructure("date", dateindex)
 
 	eventindex, err := boltstore.NewEventIndex(db)
 	if err != nil {

@@ -4,13 +4,14 @@ import (
 	"context"
 	"time"
 
+	"bitbucket.org/kleinnic74/photos/index"
 	"bitbucket.org/kleinnic74/photos/library"
 	"bitbucket.org/kleinnic74/photos/logging"
 	"github.com/boltdb/bolt"
 	"go.uber.org/zap"
 )
 
-const DateIndexVersion = library.Version(1)
+const DateIndexVersion = library.Version(3)
 
 // DateIndex indexes photos by date
 type DateIndex struct {
@@ -38,6 +39,13 @@ func NewDateIndex(db *bolt.DB) (*DateIndex, error) {
 	return &DateIndex{db: db}, nil
 }
 
+func (d *DateIndex) MigrateStructure(ctx context.Context, from library.Version) (library.Version, bool, error) {
+	migrations := index.NewStructuralMigrations()
+	migrations.Register(3, resetBuckets(d.db, datesBucket))
+	reindex, err := migrations.Apply(ctx, from, DateIndexVersion)
+	return DateIndexVersion, reindex, err
+}
+
 // Add will add the given photo to this date index based on its taken time
 func (d *DateIndex) Add(ctx context.Context, photo *library.Photo) error {
 	return d.db.Update(func(tx *bolt.Tx) error {
@@ -49,7 +57,7 @@ func (d *DateIndex) Add(ctx context.Context, photo *library.Photo) error {
 			log.Warn("Failed to create sub-bucket", zap.String("bucket", key), zap.Error(err))
 			return err
 		}
-		return dayBucket.Put([]byte(photo.ID), []byte(photo.ID))
+		return dayBucket.Put([]byte(photo.SortID), []byte(photo.ID))
 	})
 }
 
@@ -67,7 +75,7 @@ func (d *DateIndex) FindRangePaged(ctx context.Context, from, to time.Time, star
 				continue
 			}
 			c := dayBucket.Cursor()
-			for k, _ := c.First(); k != nil; k, _ = c.Next() {
+			for k, v := c.First(); k != nil; k, v = c.Next() {
 				if index < start {
 					index++
 					continue
@@ -76,7 +84,7 @@ func (d *DateIndex) FindRangePaged(ctx context.Context, from, to time.Time, star
 					hasMore = true
 					return nil
 				}
-				ids = append(ids, library.PhotoID(k))
+				ids = append(ids, library.PhotoID(v))
 				count++
 				index++
 			}
