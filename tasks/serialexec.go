@@ -104,22 +104,29 @@ func (t *serialTaskExecutor) DrainTasks(ctx context.Context, completed Completio
 			s.exec <- e
 			close(s.exec)
 		case res := <-resCh:
-			logger.Info("Task completed", zap.String("task", res.task.Describe()),
-				zap.Uint64("taskID", uint64(res.ID)),
-				zap.String("taskStatus", string(res.Status)),
-				zap.Error(res.Error))
-			completed(res)
-			delete(queue, res.ID)
-			if len(pending) > 0 {
-				e := pending[0]
-				pending = pending[1:]
-				e.Status = Running
-				taskCh <- e
-				queue[e.ID] = e
+			if res.Status == Running {
+				// Progress update
+				queue[res.ID] = res
+			} else {
+				logger.Info("Task completed", zap.String("task", res.task.Describe()),
+					zap.Uint64("taskID", uint64(res.ID)),
+					zap.String("taskStatus", string(res.Status)),
+					zap.Error(res.Error))
+				completed(res)
+				delete(queue, res.ID)
+				if len(pending) > 0 {
+					// Pick the next task from the pending queue
+					e := pending[0]
+					pending = pending[1:]
+					e.Status = Running
+					taskCh <- e
+					queue[e.ID] = e
+				}
 			}
 		case q := <-t.queryCh:
 			executions := []Execution{}
 			for _, v := range queue {
+				v.Title = v.task.Describe()
 				executions = append(executions, v)
 			}
 			q <- executions

@@ -31,7 +31,6 @@ type TaskDefinition struct {
 }
 
 var (
-	ids   uint64
 	queue []Execution
 
 	logger = logging.From(context.Background()).Named("tasks")
