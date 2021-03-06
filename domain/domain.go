@@ -33,16 +33,29 @@ const (
 	Rotate90Orientation
 )
 
+type orientationFilter struct {
+	transform  gift.Filter
+	swapBounds bool
+}
+
+func (f orientationFilter) Bounds(i image.Image) image.Rectangle {
+	if f.swapBounds {
+		return image.Rect(0, 0, i.Bounds().Dy(), i.Bounds().Dx())
+	} else {
+		return image.Rect(0, 0, i.Bounds().Dx(), i.Bounds().Dy())
+	}
+}
+
 // Filters to rotate an image according to its EXIF orientation tag
 //  see https://storage.googleapis.com/go-attachment/4341/0/exif-orientations.png
-var orientationFilters = []gift.Filter{
-	gift.FlipHorizontal(), // EXIF 2
-	gift.Rotate180(),
-	gift.FlipVertical(),
-	gift.Transpose(),
-	gift.Rotate270(),
-	gift.Transverse(),
-	gift.Rotate90(), // EXIF 8
+var orientationFilters = []orientationFilter{
+	{gift.FlipHorizontal(), false}, // EXIF 2
+	{gift.Rotate180(), false},
+	{gift.FlipVertical(), false},
+	{gift.Transpose(), true},
+	{gift.Rotate270(), true},
+	{gift.Transverse(), true},
+	{gift.Rotate90(), true}, // EXIF 8
 }
 
 func (o Orientation) Apply(src image.Image) image.Image {
@@ -50,16 +63,16 @@ func (o Orientation) Apply(src image.Image) image.Image {
 	if !needsTransform {
 		return src
 	}
-	dst := image.NewRGBA(src.Bounds())
-	filter.Draw(dst, src, nil)
+	dst := image.NewRGBA(filter.Bounds(src))
+	filter.transform.Draw(dst, src, nil)
 	return image.Image(dst)
 }
 
-func (o Orientation) Filter() (gift.Filter, bool) {
+func (o Orientation) Filter() (orientationFilter, bool) {
 	i := int(o) - 2
 	switch {
 	case i < 0 || i >= len(orientationFilters):
-		return nil, false
+		return orientationFilter{}, false
 	default:
 		return orientationFilters[i], true
 	}

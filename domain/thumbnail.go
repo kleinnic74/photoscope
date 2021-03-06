@@ -43,11 +43,5 @@ func (t LocalThumber) CreateThumb(in io.Reader, format Format, orientation Orien
 		gift.ResizeToFit(targetSize.Dx(), targetSize.Dy(), gift.LinearResampling),
 	)
 	filter.Draw(thumb, img)
-	if reorientate, needed := orientation.Filter(); needed {
-		targetSize = filter.Bounds(targetSize)
-		rotated := image.NewRGBA(targetSize)
-		reorientate.Draw(rotated, thumb, nil)
-		thumb = rotated
-	}
-	return thumb, nil
+	return image.Image(orientation.Apply(thumb)), nil
 }
