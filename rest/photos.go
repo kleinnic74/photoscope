@@ -31,10 +31,10 @@ func NewApp(lib library.PhotoLibrary) (a *App) {
 }
 
 func (a *App) InitRoutes(r *mux.Router) {
-	r.HandleFunc("/photos/{id}/view", a.getPhotoImage).Methods("GET")
-	r.HandleFunc("/photos/{id}/thumb", a.getThumb).Methods("GET")
-	r.HandleFunc("/photos/{id}", a.getPhoto).Methods("GET")
-	r.HandleFunc("/photos", a.getPhotos).Methods("GET")
+	r.HandleFunc("/photos/{id}/view", a.getPhotoImage).Methods("GET").Name("/photos/{id}/view")
+	r.HandleFunc("/photos/{id}/thumb", a.getThumb).Methods("GET").Name("/photos/{id}/thumb")
+	r.HandleFunc("/photos/{id}", a.getPhoto).Methods("GET").Name("/photos/{id}")
+	r.HandleFunc("/photos", a.getPhotos).Methods("GET").Name("/photos")
 }
 
 func (a *App) route(path string, f http.HandlerFunc) *mux.Route {

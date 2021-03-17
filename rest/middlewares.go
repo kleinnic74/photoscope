@@ -8,11 +8,17 @@ import (
 	"bitbucket.org/kleinnic74/photos/consts"
 	"bitbucket.org/kleinnic74/photos/logging"
 	"github.com/google/uuid"
+	"github.com/gorilla/mux"
 	"go.uber.org/zap"
 )
 
-func WithMiddleWares(handler http.Handler, name string) http.Handler {
-	return cors(addRequestID(logRequest(handler, name)))
+func WithMiddleWares(router *mux.Router, name string) http.Handler {
+	router.Use(cors)
+	router.Use(addRequestID)
+	router.Use(func(h http.Handler) http.Handler {
+		return logRequest(h, name)
+	})
+	return router
 }
 
 type responseWrapper struct {
@@ -50,9 +56,15 @@ func logRequest(f http.Handler, name string) http.Handler {
 		}
 		defer func() {
 			log := logging.From(r.Context()).Named(name)
+			route := mux.CurrentRoute(r)
+			var routeName string
+			if route != nil {
+				routeName = route.GetName()
+			}
 			log.Info("HTTP Request",
 				zap.String("method", r.Method),
 				zap.String("path", r.URL.Path),
+				zap.String("route", routeName),
 				zap.Duration("duration", time.Since(start)),
 				zap.Int("status", wrapper.status))
 		}()

@@ -14,8 +14,11 @@ BINARIES=$(BINARY_WIN) $(BINARY_ARM) $(TOOLS)
 
 FRONTEND=frontend/
 
+GIT_COMMIT=$(shell git rev-list -1 HEAD)
+
 GO_DEBUG_VAR=-X 'bitbucket.org/kleinnic74/photos/consts.devmode=true'
-GO_VARS=$(GO_DEBUG_VAR) -X 'bitbucket.org/kleinnic74/photos/logging.errorLog=true'
+GO_VARS=$(GO_DEBUG_VAR) -X 'bitbucket.org/kleinnic74/photos/logging.errorLog=true' \
+	-X 'bitbucket.org/kleinnic74/photos/consts.GitCommit=$(GIT_COMMIT)' 
 GO_ARM=CGO_ENABLED=0 GOARM=7 GOARCH=arm GOOS=linux
 
 .PHONY: all
