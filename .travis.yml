@@ -1,3 +1,9 @@
-language: go
-go:
-  - 1.x
+jobs:
+  include:
+    - language: javascript
+      before_script:
+        - cd frontend
+    - language: go
+      go:
+        - 1.x
+
