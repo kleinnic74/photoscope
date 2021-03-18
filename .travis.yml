@@ -1,6 +1,8 @@
 jobs:
   include:
-    - language: javascript
+    - language: node_js
+      node:
+        - 12
       before_script:
         - cd frontend
       script:
