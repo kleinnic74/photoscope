@@ -1,17 +1,8 @@
-jobs:
-  include:
-    - language: node_js
-      node:
-        - 12
-      before_script:
-        - cd frontend
-      script:
-        - npm install
-        - npm run build
-    - language: go
-      go:
-        - 1.x
-      node:
-        - 12
+language: go
+go:
+  - 1.x
+before_script:
+  - nvm install 10.15
+      
 
 
