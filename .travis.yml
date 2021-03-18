@@ -3,6 +3,9 @@ jobs:
     - language: javascript
       before_script:
         - cd frontend
+      script:
+        - npm install
+        - npm run build
     - language: go
       go:
         - 1.x
