@@ -1,4 +1,6 @@
-# Poor man's Photo Management
+# Photoscope
+
+[![Build Status](https://travis-ci.com/kleinnic74/photos.svg?branch=master)](https://travis-ci.com/kleinnic74/photos)
 
 DIY Photo Management software written in golang, targetted at managing larger collections of photos.
 
