@@ -11,4 +11,7 @@ jobs:
     - language: go
       go:
         - 1.x
+      node:
+        - 12
+
 
