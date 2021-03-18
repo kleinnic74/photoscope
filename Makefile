@@ -79,7 +79,11 @@ generate: embed/embedded_resources.go
 embed/embedded_resources.go: frontend/build
 	rm -f embed/embedded_resources.go && go generate ./embed
 
-frontend/build: $(wildcard frontend/src/**/*) $(wildcard frontend/public/**/*)
+frontend/node_modules: frontend/package.json
+	cd frontend && npm install
+	touch frontend/node_modules
+
+frontend/build: $(wildcard frontend/src/**/*) $(wildcard frontend/public/**/*) frontend/node_modules
 	cd frontend && npm run build
 	touch frontend/build
 
