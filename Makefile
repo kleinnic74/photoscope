@@ -56,8 +56,8 @@ test:
 
 .PHONY: clean
 clean:
-	rm -fr $(BINDIR)
-	rm embed/embedded_resources.go
+	$(RM) -r $(BINDIR)
+	$(RM) embed/embedded_resources.go
 	go clean ./...
 
 .PHONY: run
