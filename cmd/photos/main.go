@@ -90,6 +90,12 @@ func main() {
 	}
 	defer db.Close()
 
+	instance, err := NewInstance(db)
+	if err != nil {
+		logger.Fatal("Failed to initialize library", zap.Error(err))
+	}
+	logger, ctx = logging.FromWithFields(ctx, zap.String("instance", instance.ID))
+
 	migrator, err := index.NewMigrationCoordinator(db)
 	if err != nil {
 		logger.Fatal("Failed to initialize migration coordinator", zap.Error(err))
@@ -213,8 +219,9 @@ func main() {
 		}
 	}
 	server := http.Server{
-		Addr:    fmt.Sprintf(":%d", port),
-		Handler: rest.WithMiddleWares(router, "rest"),
+		Addr:        fmt.Sprintf(":%d", port),
+		Handler:     rest.WithMiddleWares(router, "rest"),
+		BaseContext: func(l net.Listener) context.Context { return ctx },
 	}
 	go func() {
 		logger.Info("Starting HTTP server...", zap.Uint("port", port))

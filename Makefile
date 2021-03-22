@@ -3,6 +3,7 @@ BINDIR=bin
 BINDIR_WIN=$(BINDIR)/win
 BINDIR_ARM=$(BINDIR)/arm
 
+BINARY_UNIX=$(BINDIR)/photos
 BINARY_WIN=$(BINDIR_WIN)/photos.exe
 BINARY_ARM=$(BINDIR_ARM)/photos
 
@@ -10,16 +11,18 @@ TOOLS=./cmd/dbinspect ./cmd/dircheck ./cmd/exifprint
 
 PKG=./cmd/photos
 
-BINARIES=$(BINARY_WIN) $(BINARY_ARM) $(TOOLS)
+BINARIES=$(BINARY_WIN) $(BINARY_ARM) $(BINARY_UNIX) $(TOOLS)
 
 FRONTEND=frontend/
 
 GIT_COMMIT=$(shell git rev-list -1 HEAD)
+GIT_BRANCH=$(shell git rev-parse --abbrev-ref HEAD)
 
 GO_DEBUG_VAR=-X 'bitbucket.org/kleinnic74/photos/consts.devmode=true'
 GO_VARS=$(GO_DEBUG_VAR) -X 'bitbucket.org/kleinnic74/photos/logging.errorLog=true' \
 	-X 'bitbucket.org/kleinnic74/photos/consts.GitCommit=$(GIT_COMMIT)' 
 GO_ARM=CGO_ENABLED=0 GOARM=7 GOARCH=arm GOOS=linux
+GO_WIN=CGO_ENABLED=0 GOOS=windows
 
 .PHONY: all
 all: build frontend/build
@@ -32,11 +35,19 @@ $(TMPDIR):
 
 .PHONY: $(BINARY_WIN) 
 $(BINARY_WIN): $(BINDIR) generate
-	go build -ldflags "$(GO_VARS)" -o $(BINARY_WIN) $(PKG)
+	$(GO_WIN) go build -ldflags "$(GO_VARS)" -o $(BINARY_WIN) $(PKG)
 
 .PHONY: $(BINARY_ARM) 
 $(BINARY_ARM): $(BINDIR) generate
 	$(GO_ARM) go build -ldflags "$(GO_VARS)" -o $(BINARY_ARM) $(PKG)
+
+.PHONY: $(BINARY_UNIX) 
+ifeq ($(shell uname -s),Darwin)
+$(BINARY_UNIX): $(BINDIR) generate
+	go build -ldflags "$(GO_VARS)" -o $(BINARY_UNIX) $(PKG)
+else
+$(BINARY_UNIX):
+endif
 
 .PHONY: tools
 tools:
@@ -56,8 +67,8 @@ test:
 
 .PHONY: clean
 clean:
-	rm -fr $(BINDIR)
-	rm embed/embedded_resources.go
+	$(RM) -r $(BINDIR)
+	$(RM) embed/embedded_resources.go
 	go clean ./...
 
 .PHONY: run
