@@ -1,6 +1,6 @@
 # Photoscope
 
-[![Build Status](https://travis-ci.com/kleinnic74/photos.svg?branch=master)](https://travis-ci.com/kleinnic74/photos)
+[![Build Status](https://travis-ci.com/kleinnic74/photoscope.svg?branch=master)](https://travis-ci.com/kleinnic74/photoscope)
 
 DIY Photo Management software written in golang, targetted at managing larger collections of photos.
 
