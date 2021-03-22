@@ -23,8 +23,8 @@ func NewTimelineHandler(index library.DateIndex, lib library.PhotoLibrary) *Time
 }
 
 func (dates *TimelineHandler) InitRoutes(r *mux.Router) {
-	r.HandleFunc("/timeline/photos", dates.getTimelineForward).Methods("GET")
-	r.HandleFunc("/timeline/index", dates.getTimelineIndex).Methods("GET")
+	r.HandleFunc("/timeline/photos", dates.getTimelineForward).Methods("GET").Name("/timeline/photos")
+	r.HandleFunc("/timeline/index", dates.getTimelineIndex).Methods("GET").Name("/timeline/index")
 }
 
 type date string

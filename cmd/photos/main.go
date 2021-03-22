@@ -80,10 +80,6 @@ func main() {
 		cancel()
 	}()
 
-	taskRepo := tasks.NewTaskRepository()
-	tasks.RegisterTasks(taskRepo)
-	importer.RegisterTasks(taskRepo)
-
 	db, err := bolt.Open(filepath.Join(libDir, dbName), 0600, nil)
 	if err != nil {
 		logger.Fatal("Failed to initialize library", zap.Error(err))
@@ -95,6 +91,10 @@ func main() {
 		logger.Fatal("Failed to initialize library", zap.Error(err))
 	}
 	logger, ctx = logging.FromWithFields(ctx, zap.String("instance", instance.ID))
+
+	taskRepo := tasks.NewTaskRepository()
+	tasks.RegisterTasks(taskRepo)
+	importer.RegisterTasks(taskRepo)
 
 	migrator, err := index.NewMigrationCoordinator(db)
 	if err != nil {

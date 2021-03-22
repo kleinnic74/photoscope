@@ -21,9 +21,9 @@ func NewTaskHandler(repo *tasks.TaskRepository, executor tasks.TaskExecutor) *Ta
 }
 
 func (h *TaskHandler) InitRoutes(r *mux.Router) {
-	r.HandleFunc("/taskdefinitions", h.getTaskDefinitions).Methods("GET")
-	r.HandleFunc("/tasks", h.postTask).Methods("POST")
-	r.HandleFunc("/tasks", h.listTasks).Methods("GET")
+	r.HandleFunc("/taskdefinitions", h.getTaskDefinitions).Methods("GET").Name("/taskdefinitions")
+	r.HandleFunc("/tasks", h.postTask).Methods("POST").Name("/tasks")
+	r.HandleFunc("/tasks", h.listTasks).Methods("GET").Name("/tasks")
 }
 
 func (h *TaskHandler) getTaskDefinitions(w http.ResponseWriter, r *http.Request) {

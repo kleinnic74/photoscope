@@ -20,7 +20,7 @@ func NewSSEHandler(stream *events.Stream) *SSEHandler {
 }
 
 func (e *SSEHandler) InitRoutes(router *mux.Router) {
-	router.HandleFunc("/eventstream", e.listen).Methods("GET")
+	router.HandleFunc("/eventstream", e.listen).Methods("GET").Name("/eventstream")
 }
 
 func (e *SSEHandler) listen(w http.ResponseWriter, r *http.Request) {
