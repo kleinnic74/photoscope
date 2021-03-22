@@ -9,6 +9,7 @@ import (
 	"image/png"
 	"math"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -68,9 +69,7 @@ func TestGaussianCheckerboardKernel(t *testing.T) {
 		}
 		fmt.Println()
 	}
-	out, _ := os.Create("gaussianCheckerboard.png")
-	defer out.Close()
-	png.Encode(out, img)
+	saveImage(img, "gaussianChéckerboard.png")
 }
 
 func TestNoveltyScores(t *testing.T) {
@@ -116,7 +115,12 @@ func TestFindClusters(t *testing.T) {
 }
 
 func saveImage(img image.Image, name string) {
-	out, _ := os.Create(name)
+	basepath := filepath.Join("testdata", "out")
+	if err := os.MkdirAll(basepath, os.ModePerm); err != nil {
+		panic(err)
+	}
+	path := filepath.Join("testdata", "out", name)
+	out, _ := os.Create(path)
 	defer out.Close()
 	png.Encode(out, img)
 }
