@@ -88,8 +88,8 @@ run: GO_DEBUG_VAR=-X 'bitbucket.org/kleinnic74/photos/consts.devmode=false'
 run: _run
 
 .PHONY: _run
-_run: $(BINARY_WIN) $(TMPDIR)
-	cd $(TMPDIR) && ../$(BINARY_WIN) -ui ../frontend/build
+_run: $(BINARY_MAIN) $(TMPDIR)
+	cd $(TMPDIR) && ../$(BINARY_MAIN) -ui ../frontend/build
 
 .PHONY: rundev
 rundev: GO_DEBUG_VAR=-X 'bitbucket.org/kleinnic74/photos/consts.devmode=true'

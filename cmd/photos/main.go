@@ -91,7 +91,7 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to initialize local instance", zap.Error(err))
 	}
-	logger, ctx = logging.FromWithFields(ctx, zap.String("instance", instance.ID))
+	logger, ctx = logging.FromWithFields(ctx, zap.String("instance", instance.I.ID))
 
 	taskRepo := tasks.NewTaskRepository()
 	tasks.RegisterTasks(taskRepo)
@@ -160,7 +160,7 @@ func main() {
 
 	go launchStartupTasks(ctx, taskRepo, executor)
 
-	peers, err := swarm.NewController(instance.ID)
+	peers, err := swarm.NewController(instance.I)
 	go peers.ListenAndServe(ctx)
 
 	// REST Handlers
