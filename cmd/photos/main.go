@@ -30,6 +30,7 @@ import (
 	"bitbucket.org/kleinnic74/photos/logging"
 	"bitbucket.org/kleinnic74/photos/rest"
 	"bitbucket.org/kleinnic74/photos/rest/wdav"
+	"bitbucket.org/kleinnic74/photos/swarm"
 	"bitbucket.org/kleinnic74/photos/tasks"
 )
 
@@ -159,6 +160,9 @@ func main() {
 
 	go launchStartupTasks(ctx, taskRepo, executor)
 
+	peers, err := swarm.NewController(instance.ID)
+	go peers.ListenAndServe(ctx)
+
 	// REST Handlers
 	router := mux.NewRouter()
 
@@ -188,6 +192,9 @@ func main() {
 
 	indexesRest := rest.NewIndexes(indexer, migrator)
 	indexesRest.Init(router)
+
+	peersRest := rest.NewPeersAPI(peers)
+	peersRest.InitRoutes(router)
 
 	tmpdir := filepath.Join(libDir, "tmp")
 	wdav, err := wdav.NewWebDavHandler(tmpdir, backgroundImport(executor))
@@ -234,6 +241,8 @@ func main() {
 	<-ctx.Done()
 
 	logger.Info("Stopping server...")
+
+	peers.Shutdown()
 
 	ctxShutdown, cancelServerShutdown := context.WithTimeout(ctx, 5*time.Second)
 	defer func() {

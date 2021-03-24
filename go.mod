@@ -7,6 +7,7 @@ require (
 	github.com/disintegration/gift v1.2.1
 	github.com/google/uuid v1.1.1
 	github.com/gorilla/mux v1.7.4
+	github.com/grandcat/zeroconf v1.0.0
 	github.com/h2non/filetype v1.1.0
 	github.com/prometheus/client_golang v1.8.0
 	github.com/reusee/mmh3 v0.0.0-20140820141314-64b85163255b
