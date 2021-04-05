@@ -24,6 +24,8 @@ type Peer struct {
 	Text []string `json:"text,omitempty"`
 }
 
+type PeerHandler func(context.Context, Peer)
+
 type Controller struct {
 	instance *Instance
 	resolver *zeroconf.Resolver
@@ -32,6 +34,8 @@ type Controller struct {
 	peers    map[string]Peer
 	services map[string]string
 	peerLock sync.RWMutex
+
+	handlers []PeerHandler
 }
 
 var interestingServices = map[string]struct{}{
@@ -50,6 +54,10 @@ func NewController(instance *Instance) (*Controller, error) {
 		services: make(map[string]string),
 		done:     make(chan struct{}),
 	}, nil
+}
+
+func (c *Controller) OnPeerDetected(h PeerHandler) {
+	c.handlers = append(c.handlers, h)
 }
 
 func (c *Controller) ListenAndServe(ctx context.Context) {
@@ -125,6 +133,9 @@ func (c *Controller) peerDiscovered(ctx context.Context, p *zeroconf.ServiceEntr
 			zap.String("peer.type", peer.Type),
 			zap.String("peer.hostname", p.HostName),
 			zap.Strings("text", peer.Text))
+		for _, h := range c.handlers {
+			h(ctx, peer)
+		}
 	}
 }
 

@@ -3,6 +3,8 @@ package domain
 import (
 	"image"
 	"io"
+	"sort"
+	"sync"
 
 	"github.com/disintegration/gift"
 )
@@ -11,6 +13,12 @@ var (
 	Small  = ThumbSize{120, "S"}
 	Medium = ThumbSize{427, "M"}
 	Large  = ThumbSize{640, "L"}
+
+	ThumbSizes = map[string]ThumbSize{
+		Small.Name:  Small,
+		Medium.Name: Medium,
+		Large.Name:  Large,
+	}
 )
 
 type ThumbSize struct {
@@ -44,4 +52,38 @@ func (t LocalThumber) CreateThumb(in io.Reader, format Format, orientation Orien
 	)
 	filter.Draw(thumb, img)
 	return image.Image(orientation.Apply(thumb)), nil
+}
+
+type weightedThumber struct {
+	thumber Thumber
+	weight  float64
+}
+
+type weightedThumbers []weightedThumber
+
+func (a weightedThumbers) Len() int           { return len(a) }
+func (a weightedThumbers) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a weightedThumbers) Less(i, j int) bool { return a[i].weight < a[j].weight }
+
+type Thumbers struct {
+	thumbers weightedThumbers
+
+	lock sync.RWMutex
+}
+
+func (t *Thumbers) Add(thumber Thumber, weight float64) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	t.thumbers = append(t.thumbers, weightedThumber{thumber, weight})
+	sort.Sort(t.thumbers)
+}
+
+func (t *Thumbers) CreateThumb(in io.Reader, format Format, orientation Orientation, size ThumbSize) (image.Image, error) {
+	thumber := func() Thumber {
+		t.lock.RLock()
+		defer t.lock.RUnlock()
+		return t.thumbers[0].thumber
+	}()
+	return thumber.CreateThumb(in, format, orientation, size)
 }

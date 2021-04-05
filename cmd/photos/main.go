@@ -112,7 +112,10 @@ func main() {
 		logger.Fatal("Failed to initialize library", zap.Error(err))
 	}
 
-	lib, err := library.NewBasicPhotoLibrary(libDir, store, domain.LocalThumber{})
+	thumbers := &domain.Thumbers{}
+	thumbers.Add(domain.LocalThumber{}, 1)
+
+	lib, err := library.NewBasicPhotoLibrary(libDir, store, thumbers)
 	if err != nil {
 		logger.Fatal("Failed to initialize library", zap.Error(err))
 	}
@@ -161,6 +164,8 @@ func main() {
 	go launchStartupTasks(ctx, taskRepo, executor)
 
 	peers, err := swarm.NewController(instance.I)
+	peers.OnPeerDetected(addRemoteThumber(instance.I.ID, thumbers))
+
 	go peers.ListenAndServe(ctx)
 
 	// REST Handlers
@@ -195,6 +200,9 @@ func main() {
 
 	peersRest := rest.NewPeersAPI(peers)
 	peersRest.InitRoutes(router)
+
+	thumbService := rest.NewThumberAPI(domain.LocalThumber{})
+	thumbService.InitRoutes(router)
 
 	tmpdir := filepath.Join(libDir, "tmp")
 	wdav, err := wdav.NewWebDavHandler(tmpdir, backgroundImport(executor))
@@ -275,5 +283,21 @@ func backgroundImport(executor tasks.TaskExecutor) wdav.UploadedFunc {
 		if _, err := executor.Submit(ctx, task); err != nil {
 			logging.From(ctx).Warn("Could not import file", zap.String("path", path), zap.Error(err))
 		}
+	}
+}
+
+func addRemoteThumber(self string, thumbers *domain.Thumbers) swarm.PeerHandler {
+	return func(ctx context.Context, peer swarm.Peer) {
+		if self == peer.ID {
+			// Do not add ourselves as remote thumber
+			return
+		}
+		thumber, err := swarm.NewRemoteThumber(fmt.Sprintf("%s/thumb", peer.URL), domain.JPEG)
+		if err != nil {
+			logging.From(ctx).Warn("Failed to create remote thumber", zap.Error(err))
+			return
+		}
+		logging.From(ctx).Info("Remote thumber added", zap.String("peer.url", peer.URL))
+		thumbers.Add(thumber, 1)
 	}
 }
