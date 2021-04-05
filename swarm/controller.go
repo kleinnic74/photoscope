@@ -11,6 +11,11 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	PhotoscopeSVCName = "_photoscope._tcp"
+	DNSSDSVCName      = "_services._dns-sd._udp"
+)
+
 type Peer struct {
 	Name string   `json:"name"`
 	ID   string   `json:"id"`
@@ -26,7 +31,11 @@ type Controller struct {
 
 	peers    map[string]Peer
 	services map[string]string
-	peerLock sync.Mutex
+	peerLock sync.RWMutex
+}
+
+var interestingServices = map[string]struct{}{
+	PhotoscopeSVCName: {},
 }
 
 func NewController(instance *Instance) (*Controller, error) {
@@ -45,7 +54,7 @@ func NewController(instance *Instance) (*Controller, error) {
 
 func (c *Controller) ListenAndServe(ctx context.Context) {
 	logger, ctx := logging.SubFrom(ctx, "swarm.controller")
-	server, err := zeroconf.Register(c.instance.Name, "_photoscope._tcp", "local.", 8080, []string{fmt.Sprintf("id=%s", c.instance.ID)}, nil)
+	server, err := zeroconf.Register(c.instance.Name, PhotoscopeSVCName, "local.", 8080, []string{fmt.Sprintf("id=%s", c.instance.ID)}, nil)
 	if err != nil {
 		logger.Error("Failed to publish zeroconf service: %s", zap.Error(err))
 	}
@@ -53,29 +62,36 @@ func (c *Controller) ListenAndServe(ctx context.Context) {
 
 	logger.Info("Looking for peers...")
 	peerCh := make(chan *zeroconf.ServiceEntry)
+	dnssdCh := make(chan *zeroconf.ServiceEntry)
+
 	browseCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	c.resolver.Browse(browseCtx, "_services._dns-sd._udp", "", peerCh)
+	c.resolver.Browse(browseCtx, DNSSDSVCName, "", dnssdCh)
 
 	for {
 		select {
-		case p := <-peerCh:
+		case p := <-dnssdCh:
 			if p == nil {
 				continue
 			}
-			if p.Service == "_services._dns-sd._udp" {
-				// DNS-SD service, query further
-				service := p.Instance
-				if strings.HasSuffix(service, ".") {
-					service = service[:len(service)-1]
-				}
-				service = strings.TrimSuffix(service, p.Domain)
-				// TODO: protect with mutex
-				c.services[service] = service
-				logger.Info("Received DNS-SD service",
-					zap.String("peer.service", service),
-					zap.String("peer.domain", p.Domain))
-				c.resolver.Browse(ctx, service, "", peerCh)
+			// DNS-SD service, query further
+			service := canonicalServiceName(p.Instance, p.Domain)
+			logger.Info("Received DNS-SD service",
+				zap.String("peer.service", service),
+				zap.String("peer.domain", p.Domain))
+
+			if _, found := interestingServices[service]; found {
+				func() {
+					c.peerLock.Lock()
+					defer c.peerLock.Unlock()
+					logger.Debug("Querying service instances", zap.String("peer.service", service))
+
+					c.services[service] = service
+				}()
+				c.resolver.Browse(ctx, service, p.Domain, peerCh)
+			}
+		case p := <-peerCh:
+			if p == nil {
 				continue
 			}
 			c.peerDiscovered(ctx, p)
@@ -135,9 +151,20 @@ func findID(txt []string) string {
 	return ""
 }
 
+func canonicalServiceName(name, domain string) string {
+	if name[len(name)-1] == '.' {
+		name = name[:len(name)-1]
+	}
+	name = strings.TrimSuffix(name, domain)
+	if name[len(name)-1] == '.' {
+		name = name[:len(name)-1]
+	}
+	return name
+}
+
 func (c *Controller) GetPeers() (r []Peer) {
-	c.peerLock.Lock()
-	defer c.peerLock.Unlock()
+	c.peerLock.RLock()
+	defer c.peerLock.RUnlock()
 
 	for _, p := range c.peers {
 		r = append(r, p)
@@ -146,8 +173,8 @@ func (c *Controller) GetPeers() (r []Peer) {
 }
 
 func (c *Controller) GetSeenServices() (r []string) {
-	c.peerLock.Lock()
-	defer c.peerLock.Unlock()
+	c.peerLock.RLock()
+	defer c.peerLock.RUnlock()
 
 	for _, s := range c.services {
 		r = append(r, s)
