@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 
 	"bitbucket.org/kleinnic74/photos/consts"
-	"github.com/boltdb/bolt"
 	"github.com/google/uuid"
+	bolt "go.etcd.io/bbolt"
 )
 
 type Instance struct {

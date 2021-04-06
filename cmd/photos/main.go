@@ -13,8 +13,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/boltdb/bolt"
 	"github.com/gorilla/mux"
+	bolt "go.etcd.io/bbolt"
 	"go.uber.org/zap"
 
 	"bitbucket.org/kleinnic74/photos/classification"
@@ -82,13 +82,13 @@ func main() {
 
 	db, err := bolt.Open(filepath.Join(libDir, dbName), 0600, nil)
 	if err != nil {
-		logger.Fatal("Failed to initialize library", zap.Error(err))
+		logger.Fatal("Failed to initialize data store", zap.Error(err))
 	}
 	defer db.Close()
 
 	instance, err := NewInstance(db)
 	if err != nil {
-		logger.Fatal("Failed to initialize library", zap.Error(err))
+		logger.Fatal("Failed to initialize local instance", zap.Error(err))
 	}
 	logger, ctx = logging.FromWithFields(ctx, zap.String("instance", instance.ID))
 
