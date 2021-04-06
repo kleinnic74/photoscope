@@ -9,7 +9,7 @@ import (
 
 	_ "bitbucket.org/kleinnic74/photos/domain"
 
-	"github.com/boltdb/bolt"
+	bolt "go.etcd.io/bbolt"
 )
 
 var (

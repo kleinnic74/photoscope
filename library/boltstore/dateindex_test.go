@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"bitbucket.org/kleinnic74/photos/library"
-	"github.com/boltdb/bolt"
 	"github.com/stretchr/testify/assert"
+	bolt "go.etcd.io/bbolt"
 )
 
 func TestDateIndexFindDates(t *testing.T) {

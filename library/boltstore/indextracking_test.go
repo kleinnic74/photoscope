@@ -6,7 +6,7 @@ import (
 
 	"bitbucket.org/kleinnic74/photos/index"
 	"bitbucket.org/kleinnic74/photos/library"
-	"github.com/boltdb/bolt"
+	bolt "go.etcd.io/bbolt"
 )
 
 func TestAddToIndexTracker(t *testing.T) {

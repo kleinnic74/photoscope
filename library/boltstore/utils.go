@@ -2,7 +2,7 @@ package boltstore
 
 import (
 	"bitbucket.org/kleinnic74/photos/consts"
-	"github.com/boltdb/bolt"
+	bolt "go.etcd.io/bbolt"
 )
 
 // Cursor provides additional convenience functions acround a bolt.Cursor

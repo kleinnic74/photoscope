@@ -5,7 +5,7 @@ import (
 
 	"bitbucket.org/kleinnic74/photos/index"
 	"bitbucket.org/kleinnic74/photos/logging"
-	"github.com/boltdb/bolt"
+	bolt "go.etcd.io/bbolt"
 	"go.uber.org/zap"
 )
 

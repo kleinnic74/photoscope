@@ -4,6 +4,7 @@ BINDIR_WIN=$(BINDIR)/win
 BINDIR_ARM=$(BINDIR)/arm
 
 BINARY_UNIX=$(BINDIR)/photos
+BINARY_OSX=$(BINDIR)/osx/photos
 BINARY_WIN=$(BINDIR_WIN)/photos.exe
 BINARY_ARM=$(BINDIR_ARM)/photos
 
@@ -12,6 +13,14 @@ TOOLS=./cmd/dbinspect ./cmd/dircheck ./cmd/exifprint
 PKG=./cmd/photos
 
 BINARIES=$(BINARY_WIN) $(BINARY_ARM) $(BINARY_UNIX) $(TOOLS)
+ifeq ($(shell uname -s),Darwin)
+	BINARY_MAIN=${BINARY_OSX}
+	BINARIES=$(BINARY_OSX) $(BINARIES)
+else ifeq ($(shell uname -s),Linux)
+	BINARY_MAIN=${BINARY_UNIX}
+else
+	BINARY_MAIN=${BINARY_WIN}
+endif
 
 FRONTEND=frontend/
 
@@ -23,6 +32,8 @@ GO_VARS=$(GO_DEBUG_VAR) -X 'bitbucket.org/kleinnic74/photos/logging.errorLog=tru
 	-X 'bitbucket.org/kleinnic74/photos/consts.GitCommit=$(GIT_COMMIT)' 
 GO_ARM=CGO_ENABLED=0 GOARM=7 GOARCH=arm GOOS=linux
 GO_WIN=CGO_ENABLED=0 GOOS=windows
+GO_UX=CGO_ENABLED=0 GOOS=linux
+GO_OSX=CGO_ENABLED=0 GOOS=darwin
 
 .PHONY: all
 all: build frontend/build
@@ -42,12 +53,13 @@ $(BINARY_ARM): $(BINDIR) generate
 	$(GO_ARM) go build -ldflags "$(GO_VARS)" -o $(BINARY_ARM) $(PKG)
 
 .PHONY: $(BINARY_UNIX) 
-ifeq ($(shell uname -s),Darwin)
 $(BINARY_UNIX): $(BINDIR) generate
-	go build -ldflags "$(GO_VARS)" -o $(BINARY_UNIX) $(PKG)
-else
-$(BINARY_UNIX):
-endif
+	$(GO_UX) go build -ldflags "$(GO_VARS)" -o $(BINARY_UNIX) $(PKG)
+
+.PHONY: $(BINARY_OSX) 
+$(BINARY_OSX): $(BINDIR) generate
+	$(GO_OSX) go build -ldflags "$(GO_VARS)" -o $(BINARY_OSX) $(PKG)
+
 
 .PHONY: tools
 tools:
