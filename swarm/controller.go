@@ -17,11 +17,29 @@ const (
 )
 
 type Peer struct {
-	Name string   `json:"name"`
-	ID   string   `json:"id"`
-	URL  string   `json:"url"`
-	Type string   `json:"service"`
-	Text []string `json:"text,omitempty"`
+	Name       string            `json:"name"`
+	ID         string            `json:"id"`
+	URL        string            `json:"url"`
+	Type       string            `json:"service"`
+	Properties map[string]string `json:"properties,omitempty"`
+}
+
+func propertiesAsTXT(p map[string]string) (txt []string) {
+	for k, v := range p {
+		txt = append(txt, fmt.Sprintf("%s=%s", k, v))
+	}
+	return
+}
+
+func propertiesFromTXT(txt []string) (p map[string]string) {
+	p = make(map[string]string)
+	for _, kv := range txt {
+		parts := strings.SplitN(kv, "=", 2)
+		if parts[0] != "" {
+			p[parts[0]] = parts[1]
+		}
+	}
+	return
 }
 
 type PeerHandler func(context.Context, Peer)
@@ -62,7 +80,7 @@ func (c *Controller) OnPeerDetected(h PeerHandler) {
 
 func (c *Controller) ListenAndServe(ctx context.Context) {
 	logger, ctx := logging.SubFrom(ctx, "swarm.controller")
-	server, err := zeroconf.Register(c.instance.Name, PhotoscopeSVCName, "local.", 8080, []string{fmt.Sprintf("id=%s", c.instance.ID)}, nil)
+	server, err := zeroconf.Register(c.instance.Name, PhotoscopeSVCName, "local.", 8080, propertiesAsTXT(c.instance.Properties), nil)
 	if err != nil {
 		logger.Error("Failed to publish zeroconf service: %s", zap.Error(err))
 	}
@@ -119,11 +137,11 @@ func (c *Controller) peerDiscovered(ctx context.Context, p *zeroconf.ServiceEntr
 	defer c.peerLock.Unlock()
 
 	peer := Peer{
-		Name: p.Instance,
-		ID:   findID(p.Text),
-		Type: p.Service,
-		URL:  asURL(p),
-		Text: p.Text,
+		Name:       p.Instance,
+		ID:         findID(p.Text),
+		Type:       p.Service,
+		URL:        asURL(p),
+		Properties: propertiesFromTXT(p.Text),
 	}
 	if _, found := c.peers[peer.Name]; !found {
 		c.peers[peer.Name] = peer
@@ -132,7 +150,7 @@ func (c *Controller) peerDiscovered(ctx context.Context, p *zeroconf.ServiceEntr
 			zap.String("peer.URL", peer.URL),
 			zap.String("peer.type", peer.Type),
 			zap.String("peer.hostname", p.HostName),
-			zap.Strings("text", peer.Text))
+			zap.Strings("text", p.Text))
 		for _, h := range c.handlers {
 			h(ctx, peer)
 		}

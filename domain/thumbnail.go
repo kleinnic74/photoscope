@@ -56,34 +56,38 @@ func (t LocalThumber) CreateThumb(in io.Reader, format Format, orientation Orien
 
 type weightedThumber struct {
 	thumber Thumber
-	weight  float64
+	cost    float64
 }
 
-type weightedThumbers []weightedThumber
+type byAscendingCosts []weightedThumber
 
-func (a weightedThumbers) Len() int           { return len(a) }
-func (a weightedThumbers) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a weightedThumbers) Less(i, j int) bool { return a[i].weight < a[j].weight }
+func (a byAscendingCosts) Len() int           { return len(a) }
+func (a byAscendingCosts) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a byAscendingCosts) Less(i, j int) bool { return a[i].cost < a[j].cost }
 
 type Thumbers struct {
-	thumbers weightedThumbers
+	thumbers []weightedThumber
 
 	lock sync.RWMutex
 }
 
-func (t *Thumbers) Add(thumber Thumber, weight float64) {
+func (t *Thumbers) Add(thumber Thumber, cost float64) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	t.thumbers = append(t.thumbers, weightedThumber{thumber, weight})
-	sort.Sort(t.thumbers)
+	t.thumbers = append(t.thumbers, weightedThumber{thumber, cost})
+	sort.Sort(byAscendingCosts(t.thumbers))
 }
 
-func (t *Thumbers) CreateThumb(in io.Reader, format Format, orientation Orientation, size ThumbSize) (image.Image, error) {
-	thumber := func() Thumber {
-		t.lock.RLock()
-		defer t.lock.RUnlock()
-		return t.thumbers[0].thumber
-	}()
-	return thumber.CreateThumb(in, format, orientation, size)
+func (t *Thumbers) CreateThumb(in io.Reader, format Format, orientation Orientation, size ThumbSize) (img image.Image, err error) {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
+	for _, thumber := range t.thumbers {
+		img, err = thumber.thumber.CreateThumb(in, format, orientation, size)
+		if err == nil {
+			return
+		}
+	}
+	return
 }

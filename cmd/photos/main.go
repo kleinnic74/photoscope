@@ -20,6 +20,7 @@ import (
 	"bitbucket.org/kleinnic74/photos/classification"
 	"bitbucket.org/kleinnic74/photos/consts"
 	"bitbucket.org/kleinnic74/photos/domain"
+	"bitbucket.org/kleinnic74/photos/embed"
 	"bitbucket.org/kleinnic74/photos/events"
 	"bitbucket.org/kleinnic74/photos/geocoding"
 	"bitbucket.org/kleinnic74/photos/geocoding/openstreetmap"
@@ -87,9 +88,13 @@ func main() {
 	}
 	defer db.Close()
 
-	instance, err := NewInstance(db)
+	instance, err := NewInstance(db, WithProperty("ts", func() string {
+		return fmt.Sprintf("%f", benchmarkThumb())
+	}), WithPropertyValue("gc", consts.GitCommit),
+		WithPropertyValue("gr", consts.GitRepo),
+	)
 	if err != nil {
-		logger.Fatal("Failed to initialize local instance", zap.Error(err))
+		logger.Fatal("Failed to initialize library unique ID", zap.Error(err))
 	}
 	logger, ctx = logging.FromWithFields(ctx, zap.String("instance", instance.I.ID))
 
@@ -300,4 +305,37 @@ func addRemoteThumber(self string, thumbers *domain.Thumbers) swarm.PeerHandler 
 		logging.From(ctx).Info("Remote thumber added", zap.String("peer.url", peer.URL))
 		thumbers.Add(thumber, 1)
 	}
+}
+
+func WithProperty(name string, f PropertyProvider) PropertyDefinition {
+	return func() (string, PropertyProvider) {
+		return name, f
+	}
+}
+
+func WithPropertyValue(name string, value string) PropertyDefinition {
+	return func() (string, PropertyProvider) {
+		return name, func() string { return value }
+	}
+}
+
+func benchmarkThumb() (cost float64) {
+	var t domain.LocalThumber
+	refImg, err := embed.Open("/res/reference.jpg")
+	if err != nil {
+		// Cannot open reference image, assume high costs
+		cost = 1
+		return
+	}
+	defer refImg.Close()
+
+	start := time.Now()
+	if _, err := t.CreateThumb(refImg, domain.JPEG, domain.NormalOrientation, domain.Small); err != nil {
+		// Cannot create thumb, assume high costs
+		cost = 1
+		return
+	}
+	duration := time.Since(start).Milliseconds()
+	cost = 1 - 1/float64(duration)
+	return
 }

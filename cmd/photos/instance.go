@@ -6,7 +6,6 @@ import (
 	"os"
 	"strings"
 
-	"bitbucket.org/kleinnic74/photos/consts"
 	"bitbucket.org/kleinnic74/photos/swarm"
 	"github.com/google/uuid"
 	bolt "go.etcd.io/bbolt"
@@ -22,7 +21,10 @@ const (
 	idKey          = "id"
 )
 
-func NewInstance(db *bolt.DB) (*InstanceStore, error) {
+type PropertyProvider func() string
+type PropertyDefinition func() (string, PropertyProvider)
+
+func NewInstance(db *bolt.DB, p ...PropertyDefinition) (*InstanceStore, error) {
 	hostnameFQ, err := os.Hostname()
 	if err != nil {
 		return nil, err
@@ -30,7 +32,9 @@ func NewInstance(db *bolt.DB) (*InstanceStore, error) {
 	hostname := strings.Split(hostnameFQ, ".")[0]
 	store := &InstanceStore{
 		db: db,
-		I:  &swarm.Instance{},
+		I: &swarm.Instance{
+			Properties: make(map[string]string),
+		},
 	}
 	err = db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte(instanceBucket))
@@ -40,9 +44,6 @@ func NewInstance(db *bolt.DB) (*InstanceStore, error) {
 		if v := b.Get([]byte(idKey)); v != nil {
 			json.Unmarshal(v, store.I)
 		}
-		store.I.GitCommit = consts.GitCommit
-		store.I.GitRepo = consts.GitRepo
-		store.I.Name = fmt.Sprintf("Photoscope on %s", hostname)
 		if store.I.ID == "" {
 			i, err := uuid.NewRandom()
 			if err != nil {
@@ -50,6 +51,11 @@ func NewInstance(db *bolt.DB) (*InstanceStore, error) {
 			}
 			store.I.ID = i.String()
 		}
+		for _, pd := range p {
+			name, f := pd()
+			store.I.Properties[name] = f()
+		}
+		store.I.Name = fmt.Sprintf("Photoscope on %s", hostname)
 		v, _ := json.Marshal(store.I)
 		return b.Put([]byte(idKey), v)
 	})
