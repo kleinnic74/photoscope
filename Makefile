@@ -99,7 +99,7 @@ rundev: _run
 .PHONY: generate
 generate: embed/embedded_resources.go
 
-embed/embedded_resources.go: frontend/build
+embed/embedded_resources.go: frontend/build  embed/generator.go
 	rm -f embed/embedded_resources.go && go generate ./embed
 
 frontend/node_modules: frontend/package.json

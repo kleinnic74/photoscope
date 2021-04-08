@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -21,10 +22,10 @@ const (
 	idKey          = "id"
 )
 
-type PropertyProvider func() string
+type PropertyProvider func(context.Context) string
 type PropertyDefinition func() (string, PropertyProvider)
 
-func NewInstance(db *bolt.DB, p ...PropertyDefinition) (*InstanceStore, error) {
+func NewInstance(ctx context.Context, db *bolt.DB, p ...PropertyDefinition) (*InstanceStore, error) {
 	hostnameFQ, err := os.Hostname()
 	if err != nil {
 		return nil, err
@@ -51,9 +52,10 @@ func NewInstance(db *bolt.DB, p ...PropertyDefinition) (*InstanceStore, error) {
 			}
 			store.I.ID = i.String()
 		}
+		store.I.Properties["id"] = store.I.ID
 		for _, pd := range p {
 			name, f := pd()
-			store.I.Properties[name] = f()
+			store.I.Properties[name] = f(ctx)
 		}
 		store.I.Name = fmt.Sprintf("Photoscope on %s", hostname)
 		v, _ := json.Marshal(store.I)

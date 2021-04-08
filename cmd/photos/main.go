@@ -88,8 +88,8 @@ func main() {
 	}
 	defer db.Close()
 
-	instance, err := NewInstance(db, WithProperty("ts", func() string {
-		return fmt.Sprintf("%f", benchmarkThumb())
+	instance, err := NewInstance(ctx, db, WithProperty("ts", func(ctx context.Context) string {
+		return fmt.Sprintf("%f", benchmarkThumb(ctx))
 	}), WithPropertyValue("gc", consts.GitCommit),
 		WithPropertyValue("gr", consts.GitRepo),
 	)
@@ -315,15 +315,19 @@ func WithProperty(name string, f PropertyProvider) PropertyDefinition {
 
 func WithPropertyValue(name string, value string) PropertyDefinition {
 	return func() (string, PropertyProvider) {
-		return name, func() string { return value }
+		return name, func(context.Context) string { return value }
 	}
 }
 
-func benchmarkThumb() (cost float64) {
+func benchmarkThumb(ctx context.Context) (cost float64) {
 	var t domain.LocalThumber
-	refImg, err := embed.Open("/res/reference.jpg")
+
+	log := logging.From(ctx)
+
+	refImg, err := embed.Open("/jpg/reference.jpg")
 	if err != nil {
 		// Cannot open reference image, assume high costs
+		log.Warn("Cannot load benchmark image", zap.Error(err))
 		cost = 1
 		return
 	}
@@ -332,6 +336,7 @@ func benchmarkThumb() (cost float64) {
 	start := time.Now()
 	if _, err := t.CreateThumb(refImg, domain.JPEG, domain.NormalOrientation, domain.Small); err != nil {
 		// Cannot create thumb, assume high costs
+		log.Warn("Cannot create thumb out of benchmark image", zap.Error(err))
 		cost = 1
 		return
 	}
