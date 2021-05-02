@@ -46,6 +46,9 @@ type PeerHandler func(context.Context, Peer)
 
 type Controller struct {
 	instance *Instance
+
+	port uint
+
 	resolver *zeroconf.Resolver
 	done     chan struct{}
 
@@ -60,13 +63,14 @@ var interestingServices = map[string]struct{}{
 	PhotoscopeSVCName: {},
 }
 
-func NewController(instance *Instance) (*Controller, error) {
+func NewController(instance *Instance, port uint) (*Controller, error) {
 	resolver, err := zeroconf.NewResolver()
 	if err != nil {
 		return nil, err
 	}
 	return &Controller{
 		instance: instance,
+		port:     port,
 		resolver: resolver,
 		peers:    make(map[string]Peer),
 		services: make(map[string]string),
@@ -80,7 +84,7 @@ func (c *Controller) OnPeerDetected(h PeerHandler) {
 
 func (c *Controller) ListenAndServe(ctx context.Context) {
 	logger, ctx := logging.SubFrom(ctx, "swarm.controller")
-	server, err := zeroconf.Register(c.instance.Name, PhotoscopeSVCName, "local.", 8080, propertiesAsTXT(c.instance.Properties), nil)
+	server, err := zeroconf.Register(c.instance.Name, PhotoscopeSVCName, "local.", int(c.port), propertiesAsTXT(c.instance.Properties), nil)
 	if err != nil {
 		logger.Error("Failed to publish zeroconf service: %s", zap.Error(err))
 	}
@@ -131,10 +135,16 @@ func (c *Controller) peerDiscovered(ctx context.Context, p *zeroconf.ServiceEntr
 		URL:        asURL(p),
 		Properties: propertiesFromTXT(p.Text),
 	}
+	if c.instance.ID == peer.ID {
+		// Ignore outselves
+		return
+	}
+
 	if _, found := c.peers[peer.Name]; !found {
 		c.peers[peer.Name] = peer
 		logging.From(ctx).Info("Peer detected",
 			zap.String("peer.instance", peer.Name),
+			zap.String("peer.ID", peer.ID),
 			zap.String("peer.URL", peer.URL),
 			zap.String("peer.type", peer.Type),
 			zap.String("peer.hostname", p.HostName),
