@@ -89,6 +89,7 @@ run: _run
 
 .PHONY: _run
 _run: $(BINARY_MAIN) $(TMPDIR)
+	rm -f $(TMPDIR)/log.json
 	cd $(TMPDIR) && ../$(BINARY_MAIN) -ui ../frontend/build
 
 .PHONY: rundev
@@ -116,7 +117,7 @@ runui:
 
 .PHONY: deps
 
-deps: deptree.svg
+deps: $(TMPDIR)/deptree.svg 
 
-deptree.svg:
-	godepgraph -s ./cmd/photos | dot -Tsvg >deptree.svg
+$(TMPDIR)/deptree.svg: $(BINARY_MAIN) $(TMPDIR)
+	goda graph "./cmd/photos:all" | dot -Tsvg -o $@

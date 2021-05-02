@@ -87,43 +87,31 @@ func (c *Controller) ListenAndServe(ctx context.Context) {
 	defer server.Shutdown()
 
 	logger.Info("Looking for peers...")
-	peerCh := make(chan *zeroconf.ServiceEntry)
-	dnssdCh := make(chan *zeroconf.ServiceEntry)
-
-	browseCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	c.resolver.Browse(browseCtx, DNSSDSVCName, "", dnssdCh)
-
 	for {
-		select {
-		case p := <-dnssdCh:
-			if p == nil {
-				continue
-			}
-			// DNS-SD service, query further
-			service := canonicalServiceName(p.Instance, p.Domain)
-			logger.Info("Received DNS-SD service",
-				zap.String("peer.service", service),
-				zap.String("peer.domain", p.Domain))
+		peerCh := make(chan *zeroconf.ServiceEntry)
+		browseCtx, cancel := context.WithCancel(ctx)
+		defer cancel()
 
-			if _, found := interestingServices[service]; found {
-				func() {
-					c.peerLock.Lock()
-					defer c.peerLock.Unlock()
-					logger.Debug("Querying service instances", zap.String("peer.service", service))
-
-					c.services[service] = service
-				}()
-				c.resolver.Browse(ctx, service, p.Domain, peerCh)
-			}
-		case p := <-peerCh:
-			if p == nil {
-				continue
-			}
-			c.peerDiscovered(ctx, p)
-		case <-c.done:
-			logger.Info("Shutting down")
+		if err := c.resolver.Browse(browseCtx, PhotoscopeSVCName, "", peerCh); err != nil {
+			logger.Error("Failed to browse mDNS services", zap.Error(err))
 			return
+		}
+		logger.Info("mDNS browsing", zap.String("service", PhotoscopeSVCName))
+
+		for {
+			select {
+			case p := <-peerCh:
+				if p == nil {
+					continue
+				}
+				c.peerDiscovered(ctx, p)
+			case <-browseCtx.Done():
+				logger.Info("mDNS browser terminated")
+				break
+			case <-c.done:
+				logger.Info("Shutting down")
+				return
+			}
 		}
 	}
 }

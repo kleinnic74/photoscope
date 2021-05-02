@@ -47,7 +47,7 @@ func (t *ThumberAPI) createThumb(w http.ResponseWriter, r *http.Request) {
 	}
 	thumb, err := t.thumber.CreateThumb(r.Body, inputFormat, domain.NormalOrientation, size)
 	if err != nil {
-		log.Warn("Failed to create thumb", zap.String("format", f), zap.Error(err))
+		log.Warn("Failed to create thumb", zap.String("format", inputFormat.ID()), zap.Error(err))
 		Respond(r).WithError(w, http.StatusInternalServerError, err)
 		return
 	}
