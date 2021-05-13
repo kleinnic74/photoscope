@@ -15,7 +15,7 @@ PKG=./cmd/photos
 BINARIES=$(BINARY_WIN) $(BINARY_ARM) $(BINARY_UNIX) $(TOOLS)
 ifeq ($(shell uname -s),Darwin)
 	BINARY_MAIN=${BINARY_OSX}
-	BINARIES=$(BINARY_OSX) $(BINARIES)
+	BINARIES+=$(BINARY_OSX)
 else ifeq ($(shell uname -s),Linux)
 	BINARY_MAIN=${BINARY_UNIX}
 else
