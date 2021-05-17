@@ -5,7 +5,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -55,7 +54,7 @@ func init() {
 	flag.StringVar(&uiDir, "ui", "", "Path to the frontend static assets")
 	flag.UintVar(&port, "p", 8080, "HTTP server port")
 	ctx = logging.Context(context.Background(), nil)
-	logger = logging.From(ctx)
+	logger = logging.From(ctx).Named("main")
 
 	flag.Parse()
 
@@ -70,7 +69,7 @@ func init() {
 
 func main() {
 	if err := os.MkdirAll(libDir, os.ModePerm); err != nil {
-		log.Fatal("Failed to create directory", zap.String("dir", libDir), zap.Error(err))
+		logger.Fatal("Failed to create directory", zap.String("dir", libDir), zap.Error(err))
 	}
 
 	signals := make(chan os.Signal, 1)
@@ -86,7 +85,10 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to initialize data store", zap.Error(err))
 	}
-	defer db.Close()
+	defer func() {
+		db.Close()
+		logger.Info("Closed data store")
+	}()
 
 	instance, err := NewInstance(ctx, db, WithProperty("ts", func(ctx context.Context) string {
 		return fmt.Sprintf("%f", benchmarkThumb(ctx))
@@ -263,7 +265,7 @@ func main() {
 		cancelServerShutdown()
 	}()
 	if err := server.Shutdown(ctxShutdown); err != nil {
-		logger.Fatal(("Failed to shutdown HTTP server"), zap.Error(err))
+		logger.Error("Failed to shutdown HTTP server", zap.Error(err))
 	}
 
 	logger.Info("Terminated gracefully")
