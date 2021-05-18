@@ -47,7 +47,7 @@ func (i *remoteImport) Describe() string {
 func (i *remoteImport) Execute(ctx context.Context, exec tasks.TaskExecutor, lib library.PhotoLibrary) error {
 	logger, ctx := logging.SubFrom(ctx, "remoteImport")
 	c := &http.Client{}
-	u := i.remote
+	u := fmt.Sprintf("%s?p=50", i.remote)
 	var cursor string
 	var count int
 	for hasNext := true; hasNext; count++ {
