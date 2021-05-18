@@ -26,6 +26,7 @@ type Photo struct {
 	ID        library.PhotoID  `json:"id"`
 	Links     Links            `json:"links"`
 	Name      string           `json:"name"`
+	Hash      string           `json:"hash,omitempty"`
 	DateTaken time.Time        `json:"dateTaken,omitempty"`
 	Location  *gps.Coordinates `json:"location,omitempty"`
 }
@@ -47,6 +48,7 @@ func PhotoFrom(p *library.Photo) Photo {
 		ID:        p.ID,
 		Links:     PhotoLinksFor(p.ID),
 		Name:      p.Name(),
+		Hash:      p.Hash.String(),
 		DateTaken: p.DateTaken,
 		Location:  p.Location,
 	}

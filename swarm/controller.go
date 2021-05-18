@@ -22,6 +22,7 @@ type Peer struct {
 	URL        string            `json:"url"`
 	Type       string            `json:"service"`
 	Properties map[string]string `json:"properties,omitempty"`
+	IsSelf     bool              `json:"-"`
 }
 
 func propertiesAsTXT(p map[string]string) (txt []string) {
@@ -43,6 +44,14 @@ func propertiesFromTXT(txt []string) (p map[string]string) {
 }
 
 type PeerHandler func(context.Context, Peer)
+
+func SkipSelf(h PeerHandler) PeerHandler {
+	return func(ctx context.Context, p Peer) {
+		if !p.IsSelf {
+			h(ctx, p)
+		}
+	}
+}
 
 type Controller struct {
 	instance *Instance
@@ -128,17 +137,19 @@ func (c *Controller) peerDiscovered(ctx context.Context, p *zeroconf.ServiceEntr
 	c.peerLock.Lock()
 	defer c.peerLock.Unlock()
 
+	id := findID(p.Text)
 	peer := Peer{
 		Name:       p.Instance,
-		ID:         findID(p.Text),
+		ID:         id,
 		Type:       p.Service,
 		URL:        asURL(p),
 		Properties: propertiesFromTXT(p.Text),
+		IsSelf:     c.instance.ID == id,
 	}
-	if c.instance.ID == peer.ID {
-		// Ignore outselves
-		return
-	}
+	// if c.instance.ID == peer.ID {
+	// 	// Ignore ourselves
+	// 	return
+	// }
 
 	if _, found := c.peers[peer.Name]; !found {
 		c.peers[peer.Name] = peer

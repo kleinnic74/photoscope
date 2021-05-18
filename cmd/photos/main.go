@@ -171,8 +171,8 @@ func main() {
 	go launchStartupTasks(ctx, taskRepo, executor)
 
 	peers, err := swarm.NewController(instance.I, port)
-	peers.OnPeerDetected(addRemoteThumber(instance.I.ID, thumbers))
-	peers.OnPeerDetected(addRemoteSync(executor))
+	peers.OnPeerDetected(swarm.SkipSelf(addRemoteThumber(instance.I.ID, thumbers)))
+	peers.OnPeerDetected(swarm.SkipSelf(addRemoteSync(executor)))
 
 	go peers.ListenAndServe(ctx)
 

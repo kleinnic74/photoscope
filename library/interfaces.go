@@ -31,6 +31,7 @@ func (a AsendingOrderedIDs) Less(i, j int) bool { return bytes.Compare(a[i], a[j
 type PhotoLibrary interface {
 	Add(ctx context.Context, photo domain.Photo, content io.Reader) error
 	Get(ctx context.Context, id PhotoID) (*Photo, error)
+	FindByHash(ctx context.Context, hash BinaryHash) (*Photo, bool, error)
 	FindAll(ctx context.Context, order consts.SortOrder) ([]*Photo, error)
 	FindAllPaged(ctx context.Context, start, maxCount int, order consts.SortOrder) ([]*Photo, bool, error)
 	Find(ctx context.Context, start, end time.Time, order consts.SortOrder) ([]*Photo, error)

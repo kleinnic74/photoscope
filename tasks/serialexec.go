@@ -60,7 +60,8 @@ func (t *serialTaskExecutor) DrainTasks(ctx context.Context, completed Completio
 			log := logger.Named(fmt.Sprintf("Worker-%d", id))
 			for e := range taskCh {
 				log.Info("Executing task", zap.Uint64("taskID", uint64(e.ID)))
-				e.Error = e.task.Execute(ctx, t, t.photos)
+				_, taskCtx := logging.FromWithNameAndFields(ctx, "task", zap.Uint64("taskID", uint64(e.ID)))
+				e.Error = e.task.Execute(taskCtx, t, t.photos)
 				if e.Error != nil {
 					e.Status = Error
 				} else {

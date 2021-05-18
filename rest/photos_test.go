@@ -88,6 +88,10 @@ func (lib *testLib) OpenThumb(ctx context.Context, id library.PhotoID, size doma
 	return nil, nil, errors.New("Not implemented")
 }
 
+func (lib *testLib) FindByHash(ctx context.Context, hash library.BinaryHash) (*library.Photo, bool, error) {
+	return nil, false, nil
+}
+
 func newPhotoLib() library.PhotoLibrary {
 	return &testLib{photos: make([]*library.Photo, 0)}
 }

@@ -45,14 +45,14 @@ func (i *remoteImport) Describe() string {
 }
 
 func (i *remoteImport) Execute(ctx context.Context, exec tasks.TaskExecutor, lib library.PhotoLibrary) error {
-	logger := logging.From(ctx)
+	logger, ctx := logging.SubFrom(ctx, "remoteImport")
 	c := &http.Client{}
 	u := i.remote
 	var cursor string
 	var count int
 	for hasNext := true; hasNext; count++ {
 		var p page
-		logger.Info("Fatching remote page", zap.String("url", u))
+		logger.Info("Fetching remote page", zap.String("url", u))
 		resp, err := c.Get(u)
 		if err != nil {
 			logger.Warn("Remote sync failed", zap.Error(err))
@@ -63,7 +63,16 @@ func (i *remoteImport) Execute(ctx context.Context, exec tasks.TaskExecutor, lib
 			logger.Warn("Remote syncing failed", zap.Error(err))
 			return err
 		}
-		logger.Info("Sync page", zap.Int("page", count))
+		logger.Info("Sync page", zap.Int("page", count), zap.Int("itemCount", len(p.Data)))
+		for _, item := range p.Data {
+			if !item.HasHash() {
+				logger.Info("Importing unhashed photo", zap.String("photo", item.ID))
+				continue
+			}
+			if _, found, _ := lib.FindByHash(ctx, item.Hash); !found {
+				logger.Info("Importing remote photo", zap.String("photo", item.ID))
+			}
+		}
 		if cursor, hasNext = p.hasNext(); hasNext {
 			u = fmt.Sprintf("%s?c=%s", i.remote, cursor)
 		}
@@ -77,14 +86,19 @@ type page struct {
 }
 
 type item struct {
-	ID    string            `json:"id"`
-	Links map[string]string `json:"links"`
+	ID    string             `json:"id"`
+	Links map[string]string  `json:"links"`
+	Hash  library.BinaryHash `json:"hash,omitempty"`
+}
+
+func (i item) HasHash() bool {
+	return len(i.Hash) > 0
 }
 
 func (p page) hasNext() (string, bool) {
 	for _, l := range p.Links {
 		if l.Name == "next" {
-			return l.Cursor, true
+			return l.Cursor, l.Cursor != ""
 		}
 	}
 	return "", false

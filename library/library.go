@@ -148,6 +148,15 @@ func (lib *BasicPhotoLibrary) Get(ctx context.Context, id PhotoID) (*Photo, erro
 	return lib.db.Get(id)
 }
 
+func (lib *BasicPhotoLibrary) FindByHash(ctx context.Context, hash BinaryHash) (*Photo, bool, error) {
+	id, exists := lib.db.Exists(hash)
+	if !exists {
+		return nil, false, nil
+	}
+	photo, err := lib.Get(ctx, id)
+	return photo, err == nil, err
+}
+
 // FindAll returns all photos from the underlying store
 func (lib *BasicPhotoLibrary) FindAll(ctx context.Context, order consts.SortOrder) ([]*Photo, error) {
 	return lib.db.FindAll(order)
