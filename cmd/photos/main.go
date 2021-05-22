@@ -165,6 +165,11 @@ func main() {
 	metrics := rest.NewMetricsHandler()
 	metrics.InitRoutes(router)
 
+	if consts.IsDevMode() {
+		logs := rest.NewLogsHandler()
+		logs.InitRoutes(router)
+	}
+
 	sse := rest.NewSSEHandler(bus)
 	sse.InitRoutes(router)
 
