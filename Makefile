@@ -1,26 +1,24 @@
 TMPDIR=tmp
 BINDIR=bin
+APPNAME=photoscope
+
 BINDIR_WIN=$(BINDIR)/win
 BINDIR_ARM=$(BINDIR)/arm
 
-BINARY_UNIX=$(BINDIR)/photos
-BINARY_OSX=$(BINDIR)/osx/photos
-BINARY_WIN=$(BINDIR_WIN)/photos.exe
-BINARY_ARM=$(BINDIR_ARM)/photos
+PLATFORMS=darwin win linux arm
+
+BINARY_linux=$(BINDIR)/linux/$(APPNAME)
+BINARY_darwin=$(BINDIR)/darwin/$(APPNAME)
+BINARY_win=$(BINDIR)/win/$(APPNAME).exe
+BINARY_arm=$(BINDIR)/arm/$(APPNAME)
 
 TOOLS=./cmd/dbinspect ./cmd/dircheck ./cmd/exifprint
 
 PKG=./cmd/photos
 
-BINARIES=$(BINARY_WIN) $(BINARY_ARM) $(BINARY_UNIX) $(TOOLS)
-ifeq ($(shell uname -s),Darwin)
-	BINARY_MAIN=${BINARY_OSX}
-	BINARIES+=$(BINARY_OSX)
-else ifeq ($(shell uname -s),Linux)
-	BINARY_MAIN=${BINARY_UNIX}
-else
-	BINARY_MAIN=${BINARY_WIN}
-endif
+OS=$(shell uname -s | tr '[:upper:]' '[:lower:]')
+BINARIES=$(BINARY_win) $(BINARY_arm) $(BINARY_linux) $(BINARY_darwin) $(TOOLS)
+BINARY_MAIN=$(BINARY_$(OS))
 
 FRONTEND=frontend/
 
@@ -44,21 +42,17 @@ $(BINDIR):
 $(TMPDIR):
 	mkdir $(TMPDIR)
 
-.PHONY: $(BINARY_WIN) 
-$(BINARY_WIN): $(BINDIR) generate
-	$(GO_WIN) go build -ldflags "$(GO_VARS)" -o $(BINARY_WIN) $(PKG)
+$(BINARY_win): $(BINDIR) generate
+	$(GO_WIN) go build -ldflags "$(GO_VARS)" -o $@ $(PKG)
 
-.PHONY: $(BINARY_ARM) 
-$(BINARY_ARM): $(BINDIR) generate
-	$(GO_ARM) go build -ldflags "$(GO_VARS)" -o $(BINARY_ARM) $(PKG)
+$(BINARY_arm): $(BINDIR) generate
+	$(GO_ARM) go build -ldflags "$(GO_VARS)" -o $@ $(PKG)
 
-.PHONY: $(BINARY_UNIX) 
-$(BINARY_UNIX): $(BINDIR) generate
-	$(GO_UX) go build -ldflags "$(GO_VARS)" -o $(BINARY_UNIX) $(PKG)
+$(BINARY_linux): $(BINDIR) generate
+	$(GO_UX) go build -ldflags "$(GO_VARS)" -o $@ $(PKG)
 
-.PHONY: $(BINARY_OSX) 
-$(BINARY_OSX): $(BINDIR) generate
-	$(GO_OSX) go build -ldflags "$(GO_VARS)" -o $(BINARY_OSX) $(PKG)
+$(BINARY_darwin): $(BINDIR) generate
+	$(GO_OSX) go build -ldflags "$(GO_VARS)" -o $@ $(PKG)
 
 
 .PHONY: tools
@@ -79,7 +73,7 @@ test:
 
 .PHONY: clean
 clean:
-	$(RM) -r $(BINDIR)
+	$(RM) -r $(BINDIR) dist
 	$(RM) embed/embedded_resources.go
 	go clean ./...
 
@@ -88,8 +82,8 @@ run: GO_DEBUG_VAR=-X 'bitbucket.org/kleinnic74/photos/consts.devmode=false'
 run: _run
 
 .PHONY: _run
-_run: $(BINARY_WIN) $(TMPDIR)
-	cd $(TMPDIR) && ../$(BINARY_WIN) -ui ../frontend/build
+_run: $(BINARY_MAIN) $(TMPDIR)
+	cd $(TMPDIR) && ../$(BINARY_MAIN) -ui ../frontend/build
 
 .PHONY: rundev
 rundev: GO_DEBUG_VAR=-X 'bitbucket.org/kleinnic74/photos/consts.devmode=true'
@@ -120,3 +114,13 @@ deps: deptree.svg
 
 deptree.svg:
 	godepgraph -s ./cmd/photos | dot -Tsvg >deptree.svg
+
+.PHONY: dist
+dist: $(BINARIES)
+	@mkdir -p dist
+	@echo os=$(OS) binary_main=$(BINARY_MAIN)
+	for p in $(PLATFORMS); do \
+	    echo Building dist for $$p... ; \
+		files=$$(cd $(BINDIR)/$$p && find . -type f) ; \
+		tar cvfz dist/$(APPNAME)-$$p.tar.gz -C $(BINDIR)/$$p $$files ; \
+	done
