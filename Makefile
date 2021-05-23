@@ -15,7 +15,7 @@ PKG=./cmd/photos
 BINARIES=$(BINARY_WIN) $(BINARY_ARM) $(BINARY_UNIX) $(TOOLS)
 ifeq ($(shell uname -s),Darwin)
 	BINARY_MAIN=${BINARY_OSX}
-	BINARIES=$(BINARY_OSX) $(BINARIES)
+	BINARIES+=$(BINARY_OSX)
 else ifeq ($(shell uname -s),Linux)
 	BINARY_MAIN=${BINARY_UNIX}
 else
@@ -106,7 +106,7 @@ frontend/node_modules: frontend/package.json
 	cd frontend && npm install
 	touch frontend/node_modules
 
-frontend/build: $(wildcard frontend/src/**/*) $(wildcard frontend/public/**/*) frontend/node_modules
+frontend/build: $(shell find frontend/src -type f) $(shell find frontend/public -type f) frontend/node_modules
 	cd frontend && npm run build
 	touch frontend/build
 
