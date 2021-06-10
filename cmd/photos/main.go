@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/pprof"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -19,7 +20,6 @@ import (
 	"bitbucket.org/kleinnic74/photos/classification"
 	"bitbucket.org/kleinnic74/photos/consts"
 	"bitbucket.org/kleinnic74/photos/domain"
-	"bitbucket.org/kleinnic74/photos/embed"
 	"bitbucket.org/kleinnic74/photos/events"
 	"bitbucket.org/kleinnic74/photos/geocoding"
 	"bitbucket.org/kleinnic74/photos/geocoding/openstreetmap"
@@ -32,6 +32,7 @@ import (
 	"bitbucket.org/kleinnic74/photos/rest/wdav"
 	"bitbucket.org/kleinnic74/photos/swarm"
 	"bitbucket.org/kleinnic74/photos/tasks"
+	"github.com/kleinnic74/fflags"
 )
 
 var (
@@ -43,6 +44,8 @@ var (
 
 	logger *zap.Logger
 	ctx    context.Context
+
+	eventFeature = fflags.Define("index.events")
 )
 
 func init() {
@@ -53,8 +56,7 @@ func init() {
 	flag.StringVar(&libDir, "l", "gophotos", "Path to photo library")
 	flag.StringVar(&uiDir, "ui", "", "Path to the frontend static assets")
 	flag.UintVar(&port, "p", 8080, "HTTP server port")
-	ctx = logging.Context(context.Background(), nil)
-	logger = logging.From(ctx).Named("main")
+	logger, ctx = logging.SubFrom(context.Background(), "main")
 
 	flag.Parse()
 
@@ -68,6 +70,12 @@ func init() {
 }
 
 func main() {
+	defer func() {
+		if consts.IsDevMode() {
+			pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
+		}
+	}()
+
 	if err := os.MkdirAll(libDir, os.ModePerm); err != nil {
 		logger.Fatal("Failed to create directory", zap.String("dir", libDir), zap.Error(err))
 	}
@@ -81,6 +89,8 @@ func main() {
 		cancel()
 	}()
 
+	router := mux.NewRouter()
+
 	db, err := bolt.Open(filepath.Join(libDir, dbName), 0600, nil)
 	if err != nil {
 		logger.Fatal("Failed to initialize data store", zap.Error(err))
@@ -90,11 +100,7 @@ func main() {
 		logger.Info("Closed data store")
 	}()
 
-	instance, err := NewInstance(ctx, db, WithProperty("ts", func(ctx context.Context) string {
-		return fmt.Sprintf("%f", benchmarkThumb(ctx))
-	}), WithPropertyValue("gc", consts.GitCommit),
-		WithPropertyValue("gr", consts.GitRepo),
-	)
+	instance, err := NewInstance(ctx, db, DefaultInstanceProperties()...)
 	if err != nil {
 		logger.Fatal("Failed to initialize library unique ID", zap.Error(err))
 	}
@@ -144,11 +150,16 @@ func main() {
 	}
 	migrator.AddStructure("date", dateindex)
 
-	eventindex, err := boltstore.NewEventIndex(db)
-	if err != nil {
-		logger.Fatal("Failed to initialize event database")
-	}
-	classification.RegisterTasks(taskRepo, eventindex)
+	fflags.IfEnabled(eventFeature, func() error {
+		eventindex, err := boltstore.NewEventIndex(db)
+		if err != nil {
+			return fmt.Errorf("Failed to initialize event database: %w", err)
+		}
+		classification.RegisterTasks(taskRepo, eventindex)
+		events := rest.NewEventsHandler(eventindex, lib)
+		events.InitRoutes(router)
+		return nil
+	})
 
 	bus := events.NewStream()
 	go bus.Dispatch(ctx)
@@ -177,7 +188,6 @@ func main() {
 	go peers.ListenAndServe(ctx)
 
 	// REST Handlers
-	router := mux.NewRouter()
 
 	metrics := rest.NewMetricsHandler()
 	metrics.InitRoutes(router)
@@ -199,9 +209,6 @@ func main() {
 
 	tasksApp := rest.NewTaskHandler(taskRepo, executor)
 	tasksApp.InitRoutes(router)
-
-	events := rest.NewEventsHandler(eventindex, lib)
-	events.InitRoutes(router)
 
 	indexesRest := rest.NewIndexes(indexer, migrator)
 	indexesRest.Init(router)
@@ -308,42 +315,4 @@ func addRemoteThumber(self string, thumbers *domain.Thumbers) swarm.PeerHandler 
 		logging.From(ctx).Info("Remote thumber added", zap.String("peer.url", peer.URL))
 		thumbers.Add(thumber, 1)
 	}
-}
-
-func WithProperty(name string, f PropertyProvider) PropertyDefinition {
-	return func() (string, PropertyProvider) {
-		return name, f
-	}
-}
-
-func WithPropertyValue(name string, value string) PropertyDefinition {
-	return func() (string, PropertyProvider) {
-		return name, func(context.Context) string { return value }
-	}
-}
-
-func benchmarkThumb(ctx context.Context) (cost float64) {
-	var t domain.LocalThumber
-
-	log := logging.From(ctx)
-
-	refImg, err := embed.Open("/jpg/reference.jpg")
-	if err != nil {
-		// Cannot open reference image, assume high costs
-		log.Warn("Cannot load benchmark image", zap.Error(err))
-		cost = 1
-		return
-	}
-	defer refImg.Close()
-
-	start := time.Now()
-	if _, err := t.CreateThumb(refImg, domain.JPEG, domain.NormalOrientation, domain.Small); err != nil {
-		// Cannot create thumb, assume high costs
-		log.Warn("Cannot create thumb out of benchmark image", zap.Error(err))
-		cost = 1
-		return
-	}
-	duration := time.Since(start).Milliseconds()
-	cost = 1 - 1/float64(duration)
-	return
 }
