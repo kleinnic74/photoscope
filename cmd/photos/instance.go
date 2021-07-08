@@ -101,7 +101,7 @@ func thumbCreationSpeed(ctx context.Context) string {
 	if err != nil {
 		// Cannot open reference image, assume high costs
 		log.Warn("Cannot load benchmark image", zap.Error(err))
-		return fmt.Sprintf("%d", math.MaxInt64)
+		return fmt.Sprintf("%d", int64(math.MaxInt64))
 	}
 
 	var total int64
@@ -109,7 +109,7 @@ func thumbCreationSpeed(ctx context.Context) string {
 		cost, err := benchmarkThumb(ctx, bytes.NewReader(refImg))
 		if err != nil {
 			log.Warn("Cannot create thumb out of reference image", zap.Error(err))
-			return fmt.Sprintf("%d", math.MaxInt64)
+			return fmt.Sprintf("%d", int64(math.MaxInt64))
 		}
 		total += cost
 	}

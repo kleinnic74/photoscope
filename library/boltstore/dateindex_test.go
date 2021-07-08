@@ -34,11 +34,16 @@ func TestDateIndexFindDates(t *testing.T) {
 			for _, ts := range d.input {
 				photo := library.Photo{
 					ExtendedPhotoID: library.ExtendedPhotoID{
-						ID: library.PhotoID(fmt.Sprintf("%d", i)),
+						ID:     library.PhotoID(fmt.Sprintf("%d", i)),
+						SortID: []byte(fmt.Sprintf("%0000d", i)),
 					},
-					DateTaken: ts,
+					PhotoMeta: library.PhotoMeta{
+						DateTaken: ts,
+					},
 				}
-				dateindex.Add(context.Background(), &photo)
+				if err := dateindex.Add(context.Background(), &photo); err != nil {
+					t.Fatalf("Failed to add photo to index: %s", err)
+				}
 			}
 			timeline, err := dateindex.FindDates(context.Background())
 			if err != nil {

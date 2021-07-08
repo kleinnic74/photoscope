@@ -1,5 +1,6 @@
 TMPDIR=tmp
 BINDIR=bin
+
 BINDIR_WIN=$(BINDIR)/win
 BINDIR_ARM=$(BINDIR)/arm
 
@@ -35,6 +36,8 @@ GO_WIN=CGO_ENABLED=0 GOOS=windows
 GO_UX=CGO_ENABLED=0 GOOS=linux
 GO_OSX=CGO_ENABLED=0 GOOS=darwin
 
+GOBIN = $(shell realpath $(BINDIR)/tools)
+
 .PHONY: all
 all: build frontend/build
 
@@ -44,19 +47,15 @@ $(BINDIR):
 $(TMPDIR):
 	mkdir $(TMPDIR)
 
-.PHONY: $(BINARY_WIN) 
 $(BINARY_WIN): $(BINDIR) generate
 	$(GO_WIN) go build -ldflags "$(GO_VARS)" -o $(BINARY_WIN) $(PKG)
 
-.PHONY: $(BINARY_ARM) 
 $(BINARY_ARM): $(BINDIR) generate
 	$(GO_ARM) go build -ldflags "$(GO_VARS)" -o $(BINARY_ARM) $(PKG)
 
-.PHONY: $(BINARY_UNIX) 
 $(BINARY_UNIX): $(BINDIR) generate
 	$(GO_UX) go build -ldflags "$(GO_VARS)" -o $(BINARY_UNIX) $(PKG)
 
-.PHONY: $(BINARY_OSX) 
 $(BINARY_OSX): $(BINDIR) generate
 	$(GO_OSX) go build -ldflags "$(GO_VARS)" -o $(BINARY_OSX) $(PKG)
 
@@ -74,8 +73,8 @@ tools_arm:
 build: $(BINARIES)
 
 .PHONY: test
-test:
-	go test -v ./...
+test: $(GOBIN)/go-test-report
+	go test -json ./... | $(GOBIN)/go-test-report -o $(TMPDIR)/test_report.html
 
 .PHONY: clean
 clean:
@@ -121,3 +120,9 @@ deps: $(TMPDIR)/deptree.svg
 
 $(TMPDIR)/deptree.svg: $(BINARY_MAIN) $(TMPDIR)
 	goda graph "./cmd/photos:all" | dot -Tsvg -o $@
+
+$(GOBIN)/go-test-report: $(GOBIN) $(TMPDIR)
+	GOBIN=$(GOBIN) GO111MODULE=off go get -u github.com/vakenbolt/go-test-report/
+
+$(GOBIN):
+	mkdir -p $@

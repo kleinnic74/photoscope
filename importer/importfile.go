@@ -2,7 +2,9 @@ package importer
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 
 	"bitbucket.org/kleinnic74/photos/domain"
@@ -45,7 +47,20 @@ func (t importFileTask) Execute(ctx context.Context, tasks tasks.TaskExecutor, l
 	if t.DryRun {
 		return nil
 	}
-	if err := addToLibrary(ctx, img, lib); err != nil {
+	content, err := img.Content()
+	if err != nil {
+		return err
+	}
+	defer content.Close()
+
+	meta := library.PhotoMeta{
+		Name:        t.Path,
+		Format:      img.Format(),
+		Orientation: img.Orientation(),
+		DateTaken:   img.DateTaken(),
+		Location:    img.Location(),
+	}
+	if err := lib.Add(ctx, meta, content); err != nil {
 		return err
 	}
 
@@ -60,11 +75,41 @@ func (t importFileTask) Execute(ctx context.Context, tasks tasks.TaskExecutor, l
 	return nil
 }
 
-func addToLibrary(ctx context.Context, img domain.Photo, lib library.PhotoLibrary) error {
-	content, err := img.Content()
+type importURLTask struct {
+	MetaURL string
+	URL     string
+}
+
+func NewImportURLTask(metaURL, contentURL string) tasks.Task {
+	return &importURLTask{metaURL, contentURL}
+}
+
+func (t *importURLTask) Describe() string {
+	return fmt.Sprintf("Importing %s", t.URL)
+}
+
+func (t *importURLTask) Execute(ctx context.Context, _ tasks.TaskExecutor, lib library.PhotoLibrary) error {
+	photo, err := loadMeta(t.MetaURL)
 	if err != nil {
 		return err
 	}
-	defer content.Close()
-	return lib.Add(ctx, img, content)
+	resp, err := http.Get(t.URL)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	return lib.Add(ctx, photo, resp.Body)
+}
+
+func loadMeta(url string) (meta library.PhotoMeta, err error) {
+	var resp *http.Response
+	resp, err = http.Get(url)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	err = json.NewDecoder(resp.Body).Decode(&meta)
+	return
 }

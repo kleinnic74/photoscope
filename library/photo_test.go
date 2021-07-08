@@ -18,9 +18,11 @@ var photoData = []struct {
 	{fmt.Sprintf(`{"id":"123","sortId":"AQIDBA==","schema":%d,"format":"jpg","dateUN":1573148532000000000,"or":4}`, currentSchema),
 		Photo{schema: currentSchema,
 			ExtendedPhotoID: ExtendedPhotoID{ID: "123", SortID: []byte{1, 2, 3, 4}},
-			Orientation:     4,
-			Format:          domain.MustFormatForExt("jpg"),
-			DateTaken:       time.Date(2019, 11, 07, 17, 42, 12, 0, time.UTC),
+			PhotoMeta: PhotoMeta{
+				Orientation: 4,
+				Format:      domain.MustFormatForExt("jpg"),
+				DateTaken:   time.Date(2019, 11, 07, 17, 42, 12, 0, time.UTC),
+			},
 		}},
 }
 

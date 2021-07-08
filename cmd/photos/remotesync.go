@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"bitbucket.org/kleinnic74/photos/importer"
 	"bitbucket.org/kleinnic74/photos/library"
 	"bitbucket.org/kleinnic74/photos/logging"
 	"bitbucket.org/kleinnic74/photos/swarm"
@@ -71,6 +72,10 @@ func (i *remoteImport) Execute(ctx context.Context, exec tasks.TaskExecutor, lib
 			}
 			if _, found, _ := lib.FindByHash(ctx, item.Hash); !found {
 				logger.Info("Importing remote photo", zap.String("photo", item.ID))
+				meta := fmt.Sprintf("%s/%s", i.remote, item.Links["self"])
+				content := fmt.Sprintf("%s/%s", i.remote, item.Links["view"])
+				t := importer.NewImportURLTask(meta, content)
+				exec.Submit(ctx, t)
 			}
 		}
 		if cursor, hasNext = p.hasNext(); hasNext {

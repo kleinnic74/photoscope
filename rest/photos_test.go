@@ -45,16 +45,13 @@ type testLib struct {
 	photos []*library.Photo
 }
 
-func (lib *testLib) Add(ctx context.Context, p domain.Photo, content io.Reader) error {
+func (lib *testLib) Add(ctx context.Context, p library.PhotoMeta, content io.Reader) error {
 	lib.photos = append(lib.photos, &library.Photo{
 		ExtendedPhotoID: library.ExtendedPhotoID{
-			ID: library.PhotoID(p.ID()),
+			ID: library.PhotoID(p.Name),
 		},
-		Path:      p.Name(),
-		DateTaken: p.DateTaken(),
-		Format:    p.Format(),
-		Location:  p.Location(),
-		Size:      p.SizeInBytes(),
+		Path:      p.Name,
+		PhotoMeta: p,
 	})
 	return nil
 }

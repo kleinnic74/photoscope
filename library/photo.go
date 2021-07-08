@@ -4,7 +4,6 @@ package library
 import (
 	"bytes"
 	"encoding/json"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,20 +14,25 @@ import (
 
 const currentSchema = 6
 
-type Photo struct {
-	ExtendedPhotoID
-	schema      Version
-	Path        string             `json:"path,omitempty"`
-	Size        int64              `json:"size,omitempty"`
+type PhotoMeta struct {
+	Name        string             `json:"name,omitempty"`
 	Orientation domain.Orientation `json:"or,omitempty"`
 	Format      domain.FormatSpec  `json:"format"`
 	DateTaken   time.Time          `json:"dateUN,omitempty"`
 	Location    *gps.Coordinates   `json:"gps,omitempty"`
-	Hash        BinaryHash         `json:"hash,omitempty"`
+}
+
+type Photo struct {
+	ExtendedPhotoID
+	PhotoMeta
+	schema Version
+	Path   string     `json:"path,omitempty"`
+	Size   int64      `json:"size,omitempty"`
+	Hash   BinaryHash `json:"hash,omitempty"`
 }
 
 func (p *Photo) Name() string {
-	return filepath.Base(p.Path)
+	return p.PhotoMeta.Name
 }
 
 func (p *Photo) HasHash() bool {

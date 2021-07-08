@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"bitbucket.org/kleinnic74/photos/consts"
@@ -104,10 +105,10 @@ func (lib *BasicPhotoLibrary) AddCallback(callback NewPhotoCallback) {
 
 // Add adds a photo to this library. If the given photo already exists, then
 // an error of type PhotoAlreadyExists is returned
-func (lib *BasicPhotoLibrary) Add(ctx context.Context, photo domain.Photo, content io.Reader) error {
-	ctx = logging.Context(ctx, logging.From(ctx).Named("library").With(zap.String("source", photo.Name())))
+func (lib *BasicPhotoLibrary) Add(ctx context.Context, photo PhotoMeta, content io.Reader) error {
+	ctx = logging.Context(ctx, logging.From(ctx).Named("library").With(zap.String("source", photo.Name)))
 	targetDir, name, id := canonicalizeFilename(photo)
-	orderedID := orderedIDOf(photo.DateTaken().UTC(), id)
+	orderedID := orderedIDOf(photo.DateTaken.UTC(), id)
 	content, hash, err := LoadContent(content)
 	if err != nil {
 		return err
@@ -126,12 +127,9 @@ func (lib *BasicPhotoLibrary) Add(ctx context.Context, photo domain.Photo, conte
 			ID:     id,
 			SortID: orderedID,
 		},
-		DateTaken:   photo.DateTaken().UTC(),
-		Location:    photo.Location(),
-		Format:      photo.Format(),
-		Orientation: photo.Orientation(),
-		Size:        size,
-		Hash:        hash,
+		PhotoMeta: photo,
+		Size:      size,
+		Hash:      hash,
 	}
 	logging.From(ctx).Info("Added", zap.String("photo", string(id)), zap.Any("location", p.Location))
 	if err := lib.db.Add(p); err != nil {
@@ -287,13 +285,24 @@ func (lib *BasicPhotoLibrary) OpenThumb(ctx context.Context, id PhotoID, size do
 	return f, lib.thumbFormat, nil
 }
 
-func canonicalizeFilename(photo domain.Photo) (dir, filename string, id PhotoID) {
-	dir = photo.DateTaken().Format("2006/01/02")
-	filename = fmt.Sprintf("%s.%s", photo.ID(), photo.Format().ID())
+var unknownIDs uint32
+
+func canonicalizeFilename(photo PhotoMeta) (dir, filename string, id PhotoID) {
+	dir = photo.DateTaken.Format("2006/01/02")
+	name := photo.Name
+	if name == "" {
+		id := atomic.AddUint32(&unknownIDs, 1)
+		name = fmt.Sprintf("%x-%x", photo.DateTaken.UnixNano(), id)
+	}
+	if dot := strings.LastIndex(name, "."); dot != -1 {
+		name = name[0:dot]
+	}
+	basename := fmt.Sprintf("%s.%s", name, photo.Format.ID())
 	h := mmh3.New128()
-	h.Write([]byte(photo.DateTaken().Format(time.RFC3339)))
-	h.Write([]byte(strings.ToLower(filename)))
+	h.Write([]byte(photo.DateTaken.Format(time.RFC3339)))
+	h.Write([]byte(strings.ToLower(basename)))
 	id = PhotoID(fmt.Sprintf("%x", h.Sum(nil)))
+	filename = fmt.Sprintf("%s.%s", id, photo.Format.ID())
 	return
 }
 
