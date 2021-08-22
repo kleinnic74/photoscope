@@ -10,7 +10,8 @@ import (
 )
 
 func TestMigrations(t *testing.T) {
-	migrations := instanceMigrations()
+	ID := LibraryID("libID")
+	migrations := instanceMigrations(ID)
 	migrations.Register(1, InstanceFunc(func(ctx context.Context, p Photo, _ ReaderFunc) (Photo, error) {
 		p.Orientation = 1
 		return p, nil
@@ -27,13 +28,17 @@ func TestMigrations(t *testing.T) {
 					SortID: []byte{0x30, 0x30, 0x30, 0x31, 0x2d, 0x30, 0x31, 0x2d, 0x30, 0x31, 0x54, 0x30, 0x30, 0x3a, 0x30, 0x30, 0x3a, 0x30, 0x30, 0x5a, 0xc3, 0x5d, 0x1c, 0x72},
 				},
 				PhotoMeta: PhotoMeta{Orientation: 1},
+				Store:     ID,
 				Hash:      "E5d6oXltiEgafGIYfZLv7g=="},
 			expectChange: true},
 		{src: Photo{schema: 1, PhotoMeta: PhotoMeta{Orientation: 0}, Hash: "E5d6oXltiEgafGIYfZLv7g=="},
 			dst: Photo{schema: currentSchema,
 				ExtendedPhotoID: ExtendedPhotoID{
 					SortID: []byte{0x30, 0x30, 0x30, 0x31, 0x2d, 0x30, 0x31, 0x2d, 0x30, 0x31, 0x54, 0x30, 0x30, 0x3a, 0x30, 0x30, 0x3a, 0x30, 0x30, 0x5a, 0x0, 0x0, 0x0, 0x0},
-				}, PhotoMeta: PhotoMeta{Orientation: 0}, Hash: "E5d6oXltiEgafGIYfZLv7g=="}, expectChange: true},
+				},
+				PhotoMeta: PhotoMeta{Orientation: 0},
+				Store:     ID,
+				Hash:      "E5d6oXltiEgafGIYfZLv7g=="}, expectChange: true},
 	}
 	for i, d := range data {
 		ctx := context.Background()

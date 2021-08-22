@@ -16,6 +16,7 @@ import (
 	"bitbucket.org/kleinnic74/photos/consts"
 	"bitbucket.org/kleinnic74/photos/domain"
 	"bitbucket.org/kleinnic74/photos/logging"
+	"github.com/google/uuid"
 	"github.com/reusee/mmh3"
 	"go.uber.org/zap"
 )
@@ -26,8 +27,11 @@ const (
 
 type NewPhotoCallback func(ctx context.Context, p *Photo) error
 
+type LibraryID string
+
 // BasicPhotoLibrary is a library storing photos on the filesystem
 type BasicPhotoLibrary struct {
+	ID       LibraryID
 	basedir  string
 	photodir string
 	dirMode  os.FileMode
@@ -87,7 +91,13 @@ func NewBasicPhotoLibrary(basedir string, store ClosableStore, thumber domain.Th
 	if err := os.MkdirAll(thumbsDir, defaultDirMode); err != nil {
 		return nil, err
 	}
+	idFilename := filepath.Join(absdir, "ID")
+	dbid, err := loadOrCreateLibraryID(idFilename)
+	if err != nil {
+		return nil, err
+	}
 	return &BasicPhotoLibrary{
+		ID:       dbid,
 		basedir:  absdir,
 		photodir: photosDir,
 		dirMode:  defaultDirMode,
@@ -127,6 +137,7 @@ func (lib *BasicPhotoLibrary) Add(ctx context.Context, photo PhotoMeta, content 
 			ID:     id,
 			SortID: orderedID,
 		},
+
 		PhotoMeta: photo,
 		Size:      size,
 		Hash:      hash,
@@ -328,7 +339,7 @@ func ComputeHash(in io.Reader) (BinaryHash, error) {
 }
 
 func (lib *BasicPhotoLibrary) MigrateInstances(ctx context.Context, progress func(int, int)) error {
-	migrations := instanceMigrations()
+	migrations := instanceMigrations(lib.ID)
 	logger, ctx := logging.SubFrom(ctx, "upgradeDB")
 	photos, err := lib.FindAll(ctx, consts.Ascending)
 	if err != nil {
@@ -412,11 +423,44 @@ func addSortID(ctx context.Context, p Photo, in ReaderFunc) (Photo, error) {
 	return p, nil
 }
 
-func instanceMigrations() InstanceMigrations {
+func addStoreID(libraryID LibraryID) InstanceFunc {
+	return func(ctx context.Context, p Photo, in ReaderFunc) (Photo, error) {
+		p.Store = libraryID
+		return p, nil
+	}
+}
+
+func loadOrCreateLibraryID(idFilename string) (LibraryID, error) {
+	idStr, err := os.ReadFile(idFilename)
+	if os.IsNotExist(err) {
+		id, err := uuid.NewRandom()
+		if err != nil {
+			return "", err
+		}
+		idStr, err := id.MarshalText()
+		if err != nil {
+			return "", err
+		}
+		f, err := os.Create(idFilename)
+		if err != nil {
+			return "", err
+		}
+		defer f.Close()
+		_, err = f.Write(idStr)
+		return LibraryID(idStr), err
+	}
+	if err != nil {
+		return "", err
+	}
+	return LibraryID(idStr), nil
+}
+
+func instanceMigrations(libraryID LibraryID) InstanceMigrations {
 	migrations := NewInstanceMigrations()
 	migrations.Register(Version(1), InstanceFunc(migratePath))
 	migrations.Register(Version(1), InstanceFunc(addOrientation))
 	migrations.Register(Version(3), InstanceFunc(migrateHash))
 	migrations.Register(Version(6), InstanceFunc(addSortID))
+	migrations.Register(Version(7), addStoreID(libraryID))
 	return migrations
 }

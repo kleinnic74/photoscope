@@ -100,12 +100,6 @@ func main() {
 		logger.Info("Closed data store")
 	}()
 
-	instance, err := NewInstance(ctx, db, DefaultInstanceProperties()...)
-	if err != nil {
-		logger.Fatal("Failed to initialize library unique ID", zap.Error(err))
-	}
-	logger, ctx = logging.FromWithFields(ctx, zap.String("instance", instance.I.ID))
-
 	taskRepo := tasks.NewTaskRepository()
 	tasks.RegisterTasks(taskRepo)
 	importer.RegisterTasks(taskRepo)
@@ -181,8 +175,14 @@ func main() {
 
 	go launchStartupTasks(ctx, taskRepo, executor)
 
-	peers, err := swarm.NewController(instance.I, port)
-	peers.OnPeerDetected(swarm.SkipSelf(addRemoteThumber(instance.I.ID, thumbers)))
+	instance, err := NewInstance(ctx, lib.ID, DefaultInstanceProperties()...)
+	if err != nil {
+		logger.Fatal("Failed to initialize library unique ID", zap.Error(err))
+	}
+	logger, ctx = logging.FromWithFields(ctx, zap.String("instance", instance.ID))
+
+	peers, err := swarm.NewController(instance, port)
+	peers.OnPeerDetected(swarm.SkipSelf(addRemoteThumber(instance.ID, thumbers)))
 	peers.OnPeerDetected(swarm.SkipSelf(addRemoteSync(executor)))
 
 	go peers.ListenAndServe(ctx)

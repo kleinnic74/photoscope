@@ -146,10 +146,6 @@ func (c *Controller) peerDiscovered(ctx context.Context, p *zeroconf.ServiceEntr
 		Properties: propertiesFromTXT(p.Text),
 		IsSelf:     c.instance.ID == id,
 	}
-	// if c.instance.ID == peer.ID {
-	// 	// Ignore ourselves
-	// 	return
-	// }
 
 	if _, found := c.peers[peer.Name]; !found {
 		c.peers[peer.Name] = peer

@@ -12,7 +12,7 @@ import (
 	"github.com/reusee/mmh3"
 )
 
-const currentSchema = 6
+const currentSchema = 7
 
 type PhotoMeta struct {
 	Name        string             `json:"name,omitempty"`
@@ -26,6 +26,7 @@ type Photo struct {
 	ExtendedPhotoID
 	PhotoMeta
 	schema Version
+	Store  LibraryID  `json:"store,omitempty"`
 	Path   string     `json:"path,omitempty"`
 	Size   int64      `json:"size,omitempty"`
 	Hash   BinaryHash `json:"hash,omitempty"`
@@ -43,6 +44,7 @@ func (p *Photo) MarshalJSON() ([]byte, error) {
 	out := struct {
 		ExtendedPhotoID
 		Schema      Version            `json:"schema"`
+		Store       LibraryID          `json:"store,omitempty"`
 		Path        string             `json:"path,omitempty"`
 		Format      string             `json:"format"`
 		Size        int                `json:"size,omitempty"`
@@ -53,6 +55,7 @@ func (p *Photo) MarshalJSON() ([]byte, error) {
 	}{
 		Schema:          currentSchema,
 		ExtendedPhotoID: p.ExtendedPhotoID,
+		Store:           p.Store,
 		Path:            p.Path,
 		Format:          p.Format.ID(),
 		DateTaken:       p.DateTaken.UnixNano(),
@@ -68,6 +71,7 @@ func (p *Photo) UnmarshalJSON(buf []byte) error {
 	var data struct {
 		ExtendedPhotoID
 		Schema      Version            `json:"schema"`
+		Store       LibraryID          `json:"store,omitempty"`
 		Path        string             `json:"path"`
 		Format      domain.FormatSpec  `json:"format"`
 		Size        int                `json:"size"`
@@ -81,6 +85,7 @@ func (p *Photo) UnmarshalJSON(buf []byte) error {
 		return err
 	}
 	p.ExtendedPhotoID = data.ExtendedPhotoID
+	p.Store = data.Store
 	p.Format = data.Format
 	p.Path = data.Path
 	if data.DateTaken != 0 {
