@@ -40,7 +40,7 @@ GO_OSX=CGO_ENABLED=0 GOOS=darwin
 GOBIN = $(shell realpath $(BINDIR))/tools
 
 .PHONY: all
-all: build frontend/build
+all: build frontend/build test
 
 $(BINDIR):
 	mkdir $(BINDIR)
