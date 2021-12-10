@@ -55,7 +55,7 @@ func TestMarshallJSON(t *testing.T) {
 			},
 			JSON: `{
   "id": "id",
-  "schema": 6,
+  "schema": 7,
   "path": "to/file",
   "format": "jpg",
   "dateUN": %d,
