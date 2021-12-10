@@ -48,7 +48,7 @@ $(BINDIR):
 $(TMPDIR):
 	mkdir $(TMPDIR)
 
-$(BINARY_win): $(BINDIR) generate
+$(BINARY_windows): $(BINDIR) generate
 	$(GO_WIN) go build -ldflags "$(GO_VARS)" -o $@ $(PKG)
 
 $(BINARY_arm): $(BINDIR) generate
