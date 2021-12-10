@@ -3,6 +3,7 @@ package library
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"time"
 
@@ -21,6 +22,8 @@ type ExtendedPhotoID struct {
 	SortID OrderedID `json:"sortId,omitempty"`
 }
 
+var MissingSortID = errors.New("SortID cannot be nil")
+
 type AsendingOrderedIDs []OrderedID
 
 func (a AsendingOrderedIDs) Len() int           { return len(a) }
@@ -29,8 +32,9 @@ func (a AsendingOrderedIDs) Less(i, j int) bool { return bytes.Compare(a[i], a[j
 
 // PhotoLibrary represents the operations on a library of photos
 type PhotoLibrary interface {
-	Add(ctx context.Context, photo domain.Photo, content io.Reader) error
+	Add(ctx context.Context, photo PhotoMeta, content io.Reader) error
 	Get(ctx context.Context, id PhotoID) (*Photo, error)
+	FindByHash(ctx context.Context, hash BinaryHash) (*Photo, bool, error)
 	FindAll(ctx context.Context, order consts.SortOrder) ([]*Photo, error)
 	FindAllPaged(ctx context.Context, start, maxCount int, order consts.SortOrder) ([]*Photo, bool, error)
 	Find(ctx context.Context, start, end time.Time, order consts.SortOrder) ([]*Photo, error)

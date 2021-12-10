@@ -10,11 +10,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"bitbucket.org/kleinnic74/photos/consts"
 	"bitbucket.org/kleinnic74/photos/domain"
 	"bitbucket.org/kleinnic74/photos/logging"
+	"github.com/google/uuid"
 	"github.com/reusee/mmh3"
 	"go.uber.org/zap"
 )
@@ -25,8 +27,11 @@ const (
 
 type NewPhotoCallback func(ctx context.Context, p *Photo) error
 
+type LibraryID string
+
 // BasicPhotoLibrary is a library storing photos on the filesystem
 type BasicPhotoLibrary struct {
+	ID       LibraryID
 	basedir  string
 	photodir string
 	dirMode  os.FileMode
@@ -86,7 +91,13 @@ func NewBasicPhotoLibrary(basedir string, store ClosableStore, thumber domain.Th
 	if err := os.MkdirAll(thumbsDir, defaultDirMode); err != nil {
 		return nil, err
 	}
+	idFilename := filepath.Join(absdir, "ID")
+	dbid, err := loadOrCreateLibraryID(idFilename)
+	if err != nil {
+		return nil, err
+	}
 	return &BasicPhotoLibrary{
+		ID:       dbid,
 		basedir:  absdir,
 		photodir: photosDir,
 		dirMode:  defaultDirMode,
@@ -104,10 +115,10 @@ func (lib *BasicPhotoLibrary) AddCallback(callback NewPhotoCallback) {
 
 // Add adds a photo to this library. If the given photo already exists, then
 // an error of type PhotoAlreadyExists is returned
-func (lib *BasicPhotoLibrary) Add(ctx context.Context, photo domain.Photo, content io.Reader) error {
-	ctx = logging.Context(ctx, logging.From(ctx).Named("library").With(zap.String("source", photo.Name())))
+func (lib *BasicPhotoLibrary) Add(ctx context.Context, photo PhotoMeta, content io.Reader) error {
+	ctx = logging.Context(ctx, logging.From(ctx).Named("library").With(zap.String("source", photo.Name)))
 	targetDir, name, id := canonicalizeFilename(photo)
-	orderedID := orderedIDOf(photo.DateTaken().UTC(), id)
+	orderedID := orderedIDOf(photo.DateTaken.UTC(), id)
 	content, hash, err := LoadContent(content)
 	if err != nil {
 		return err
@@ -126,12 +137,10 @@ func (lib *BasicPhotoLibrary) Add(ctx context.Context, photo domain.Photo, conte
 			ID:     id,
 			SortID: orderedID,
 		},
-		DateTaken:   photo.DateTaken().UTC(),
-		Location:    photo.Location(),
-		Format:      photo.Format(),
-		Orientation: photo.Orientation(),
-		Size:        size,
-		Hash:        hash,
+
+		PhotoMeta: photo,
+		Size:      size,
+		Hash:      hash,
 	}
 	logging.From(ctx).Info("Added", zap.String("photo", string(id)), zap.Any("location", p.Location))
 	if err := lib.db.Add(p); err != nil {
@@ -146,6 +155,15 @@ func (lib *BasicPhotoLibrary) Add(ctx context.Context, photo domain.Photo, conte
 // Get returns the photo with the given ID
 func (lib *BasicPhotoLibrary) Get(ctx context.Context, id PhotoID) (*Photo, error) {
 	return lib.db.Get(id)
+}
+
+func (lib *BasicPhotoLibrary) FindByHash(ctx context.Context, hash BinaryHash) (*Photo, bool, error) {
+	id, exists := lib.db.Exists(hash)
+	if !exists {
+		return nil, false, nil
+	}
+	photo, err := lib.Get(ctx, id)
+	return photo, err == nil, err
 }
 
 // FindAll returns all photos from the underlying store
@@ -278,13 +296,24 @@ func (lib *BasicPhotoLibrary) OpenThumb(ctx context.Context, id PhotoID, size do
 	return f, lib.thumbFormat, nil
 }
 
-func canonicalizeFilename(photo domain.Photo) (dir, filename string, id PhotoID) {
-	dir = photo.DateTaken().Format("2006/01/02")
-	filename = fmt.Sprintf("%s.%s", photo.ID(), photo.Format().ID())
+var unknownIDs uint32
+
+func canonicalizeFilename(photo PhotoMeta) (dir, filename string, id PhotoID) {
+	dir = photo.DateTaken.Format("2006/01/02")
+	name := photo.Name
+	if name == "" {
+		id := atomic.AddUint32(&unknownIDs, 1)
+		name = fmt.Sprintf("%x-%x", photo.DateTaken.UnixNano(), id)
+	}
+	if dot := strings.LastIndex(name, "."); dot != -1 {
+		name = name[0:dot]
+	}
+	basename := fmt.Sprintf("%s.%s", name, photo.Format.ID())
 	h := mmh3.New128()
-	h.Write([]byte(photo.DateTaken().Format(time.RFC3339)))
-	h.Write([]byte(strings.ToLower(filename)))
+	h.Write([]byte(photo.DateTaken.Format(time.RFC3339)))
+	h.Write([]byte(strings.ToLower(basename)))
 	id = PhotoID(fmt.Sprintf("%x", h.Sum(nil)))
+	filename = fmt.Sprintf("%s.%s", id, photo.Format.ID())
 	return
 }
 
@@ -310,7 +339,7 @@ func ComputeHash(in io.Reader) (BinaryHash, error) {
 }
 
 func (lib *BasicPhotoLibrary) MigrateInstances(ctx context.Context, progress func(int, int)) error {
-	migrations := instanceMigrations()
+	migrations := instanceMigrations(lib.ID)
 	logger, ctx := logging.SubFrom(ctx, "upgradeDB")
 	photos, err := lib.FindAll(ctx, consts.Ascending)
 	if err != nil {
@@ -394,11 +423,44 @@ func addSortID(ctx context.Context, p Photo, in ReaderFunc) (Photo, error) {
 	return p, nil
 }
 
-func instanceMigrations() InstanceMigrations {
+func addStoreID(libraryID LibraryID) InstanceFunc {
+	return func(ctx context.Context, p Photo, in ReaderFunc) (Photo, error) {
+		p.Store = libraryID
+		return p, nil
+	}
+}
+
+func loadOrCreateLibraryID(idFilename string) (LibraryID, error) {
+	idStr, err := os.ReadFile(idFilename)
+	if os.IsNotExist(err) {
+		id, err := uuid.NewRandom()
+		if err != nil {
+			return "", err
+		}
+		idStr, err := id.MarshalText()
+		if err != nil {
+			return "", err
+		}
+		f, err := os.Create(idFilename)
+		if err != nil {
+			return "", err
+		}
+		defer f.Close()
+		_, err = f.Write(idStr)
+		return LibraryID(idStr), err
+	}
+	if err != nil {
+		return "", err
+	}
+	return LibraryID(idStr), nil
+}
+
+func instanceMigrations(libraryID LibraryID) InstanceMigrations {
 	migrations := NewInstanceMigrations()
 	migrations.Register(Version(1), InstanceFunc(migratePath))
 	migrations.Register(Version(1), InstanceFunc(addOrientation))
 	migrations.Register(Version(3), InstanceFunc(migrateHash))
 	migrations.Register(Version(6), InstanceFunc(addSortID))
+	migrations.Register(Version(7), addStoreID(libraryID))
 	return migrations
 }

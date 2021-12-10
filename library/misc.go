@@ -20,10 +20,12 @@ func RandomPhoto() *Photo {
 			ID:     photoID,
 			SortID: orderedIDOf(dateTaken, photoID),
 		},
-		Path:        "2018/02/23",
-		Format:      f,
-		DateTaken:   dateTaken,
-		Orientation: 1,
-		Location:    coords,
+		Path: "2018/02/23",
+		PhotoMeta: PhotoMeta{
+			Format:      f,
+			DateTaken:   dateTaken,
+			Orientation: 1,
+			Location:    coords,
+		},
 	}
 }

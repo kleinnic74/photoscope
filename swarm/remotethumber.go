@@ -8,6 +8,8 @@ import (
 	"net/url"
 
 	"bitbucket.org/kleinnic74/photos/domain"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 type remoteThumber struct {
@@ -15,6 +17,9 @@ type remoteThumber struct {
 	client  *http.Client
 
 	thumbFormat domain.Format
+
+	requestCount prometheus.Counter
+	errorCount   prometheus.Counter
 }
 
 func NewRemoteThumber(baseURL string, thumbFormat domain.Format) (domain.Thumber, error) {
@@ -26,25 +31,42 @@ func NewRemoteThumber(baseURL string, thumbFormat domain.Format) (domain.Thumber
 		baseURL:     endpoint,
 		client:      &http.Client{},
 		thumbFormat: thumbFormat,
+
+		requestCount: promauto.NewCounter(prometheus.CounterOpts{
+			Subsystem:   "thumberremote",
+			Name:        "requests_total",
+			Help:        "Total number of remote thumb requests sent",
+			ConstLabels: prometheus.Labels{"url": baseURL},
+		}),
+		errorCount: promauto.NewCounter(prometheus.CounterOpts{
+			Subsystem:   "thumberremote",
+			Name:        "errors_total",
+			Help:        "Total number of erroneous remote thumb requests",
+			ConstLabels: prometheus.Labels{"url": baseURL},
+		}),
 	}, nil
 }
 
-func (t *remoteThumber) CreateThumb(in io.Reader, f domain.Format, o domain.Orientation, size domain.ThumbSize) (image.Image, error) {
+func (t *remoteThumber) CreateThumb(in io.Reader, f domain.Format, o domain.Orientation, size domain.ThumbSize) (thumb image.Image, err error) {
+	defer func() {
+		t.requestCount.Inc()
+		if err != nil {
+			t.errorCount.Inc()
+		}
+	}()
+
 	endpoint := fmt.Sprintf("%s/%s/%s", t.baseURL.String(), t.thumbFormat.ID(), size.Name)
-	r, err := http.NewRequest(http.MethodPost, endpoint, in)
-	if err != nil {
-		return nil, err
+	var r *http.Request
+	if r, err = http.NewRequest(http.MethodPost, endpoint, in); err != nil {
+		return
 	}
 	r.Header.Set("Content-Type", f.Mime())
-	resp, err := t.client.Do(r)
-	if err != nil {
-		return nil, err
+	var resp *http.Response
+	if resp, err = t.client.Do(r); err != nil {
+		return
 	}
 	defer resp.Body.Close()
 
-	thumb, err := f.Decode(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	return thumb, nil
+	thumb, err = f.Decode(resp.Body)
+	return
 }

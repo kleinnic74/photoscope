@@ -9,16 +9,20 @@ PLATFORMS=darwin win linux arm
 
 BINARY_linux=$(BINDIR)/linux/$(APPNAME)
 BINARY_darwin=$(BINDIR)/darwin/$(APPNAME)
-BINARY_win=$(BINDIR)/win/$(APPNAME).exe
+BINARY_windows=$(BINDIR)/win/$(APPNAME).exe
 BINARY_arm=$(BINDIR)/arm/$(APPNAME)
 
 TOOLS=./cmd/dbinspect ./cmd/dircheck ./cmd/exifprint
 
 PKG=./cmd/photos
 
-OS=$(shell uname -s | tr '[:upper:]' '[:lower:]')
-BINARIES=$(BINARY_win) $(BINARY_arm) $(BINARY_linux) $(BINARY_darwin) $(TOOLS)
-BINARY_MAIN=$(BINARY_$(OS))
+ifeq ($(OS), Windows_NT)
+	uname := windows
+else
+	uname := $(shell uname -s | tr '[:upper:]' '[:lower:]')
+endif
+BINARIES=$(BINARY_windows) $(BINARY_arm) $(BINARY_linux) $(BINARY_darwin) $(TOOLS)
+BINARY_MAIN:=$(BINARY_$(uname))
 
 FRONTEND=frontend/
 
@@ -32,6 +36,8 @@ GO_ARM=CGO_ENABLED=0 GOARM=7 GOARCH=arm GOOS=linux
 GO_WIN=CGO_ENABLED=0 GOOS=windows
 GO_UX=CGO_ENABLED=0 GOOS=linux
 GO_OSX=CGO_ENABLED=0 GOOS=darwin
+
+GOBIN = $(shell realpath $(BINDIR)/tools)
 
 .PHONY: all
 all: build frontend/build
@@ -68,8 +74,8 @@ tools_arm:
 build: $(BINARIES)
 
 .PHONY: test
-test:
-	go test -v ./...
+test: $(GOBIN)/go-test-report
+	go test -json ./... | $(GOBIN)/go-test-report -o $(TMPDIR)/test_report.html
 
 .PHONY: clean
 clean:
@@ -83,6 +89,8 @@ run: _run
 
 .PHONY: _run
 _run: $(BINARY_MAIN) $(TMPDIR)
+	@echo OS=$(uname) binary=$(BINARY_MAIN)
+	rm -f $(TMPDIR)/log.json
 	cd $(TMPDIR) && ../$(BINARY_MAIN) -ui ../frontend/build
 
 .PHONY: rundev
@@ -93,7 +101,7 @@ rundev: _run
 .PHONY: generate
 generate: embed/embedded_resources.go
 
-embed/embedded_resources.go: frontend/build
+embed/embedded_resources.go: frontend/build  embed/generator.go
 	rm -f embed/embedded_resources.go && go generate ./embed
 
 frontend/node_modules: frontend/package.json
@@ -110,15 +118,21 @@ runui:
 
 .PHONY: deps
 
-deps: deptree.svg
+deps: $(TMPDIR)/deptree.svg 
 
-deptree.svg:
-	godepgraph -s ./cmd/photos | dot -Tsvg >deptree.svg
+$(TMPDIR)/deptree.svg: $(BINARY_MAIN) $(TMPDIR)
+	goda graph "./cmd/photos:all" | dot -Tsvg -o $@
+
+$(GOBIN)/go-test-report: $(GOBIN) $(TMPDIR)
+	GOBIN=$(GOBIN) GO111MODULE=off go get -u github.com/vakenbolt/go-test-report/
+
+$(GOBIN):
+	mkdir -p $@
 
 .PHONY: dist
 dist: $(BINARIES)
 	@mkdir -p dist
-	@echo os=$(OS) binary_main=$(BINARY_MAIN)
+	@echo os=$(uname) binary_main=$(BINARY_MAIN)
 	for p in $(PLATFORMS); do \
 	    echo Building dist for $$p... ; \
 		files=$$(cd $(BINDIR)/$$p && find . -type f) ; \

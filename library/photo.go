@@ -4,7 +4,6 @@ package library
 import (
 	"bytes"
 	"encoding/json"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -13,22 +12,28 @@ import (
 	"github.com/reusee/mmh3"
 )
 
-const currentSchema = 6
+const currentSchema = 7
 
-type Photo struct {
-	ExtendedPhotoID
-	schema      Version
-	Path        string             `json:"path,omitempty"`
-	Size        int64              `json:"size,omitempty"`
+type PhotoMeta struct {
+	Name        string             `json:"name,omitempty"`
 	Orientation domain.Orientation `json:"or,omitempty"`
 	Format      domain.FormatSpec  `json:"format"`
 	DateTaken   time.Time          `json:"dateUN,omitempty"`
 	Location    *gps.Coordinates   `json:"gps,omitempty"`
-	Hash        BinaryHash         `json:"hash,omitempty"`
+}
+
+type Photo struct {
+	ExtendedPhotoID
+	PhotoMeta
+	schema Version
+	Store  LibraryID  `json:"store,omitempty"`
+	Path   string     `json:"path,omitempty"`
+	Size   int64      `json:"size,omitempty"`
+	Hash   BinaryHash `json:"hash,omitempty"`
 }
 
 func (p *Photo) Name() string {
-	return filepath.Base(p.Path)
+	return p.PhotoMeta.Name
 }
 
 func (p *Photo) HasHash() bool {
@@ -39,6 +44,7 @@ func (p *Photo) MarshalJSON() ([]byte, error) {
 	out := struct {
 		ExtendedPhotoID
 		Schema      Version            `json:"schema"`
+		Store       LibraryID          `json:"store,omitempty"`
 		Path        string             `json:"path,omitempty"`
 		Format      string             `json:"format"`
 		Size        int                `json:"size,omitempty"`
@@ -49,6 +55,7 @@ func (p *Photo) MarshalJSON() ([]byte, error) {
 	}{
 		Schema:          currentSchema,
 		ExtendedPhotoID: p.ExtendedPhotoID,
+		Store:           p.Store,
 		Path:            p.Path,
 		Format:          p.Format.ID(),
 		DateTaken:       p.DateTaken.UnixNano(),
@@ -64,6 +71,7 @@ func (p *Photo) UnmarshalJSON(buf []byte) error {
 	var data struct {
 		ExtendedPhotoID
 		Schema      Version            `json:"schema"`
+		Store       LibraryID          `json:"store,omitempty"`
 		Path        string             `json:"path"`
 		Format      domain.FormatSpec  `json:"format"`
 		Size        int                `json:"size"`
@@ -77,6 +85,7 @@ func (p *Photo) UnmarshalJSON(buf []byte) error {
 		return err
 	}
 	p.ExtendedPhotoID = data.ExtendedPhotoID
+	p.Store = data.Store
 	p.Format = data.Format
 	p.Path = data.Path
 	if data.DateTaken != 0 {

@@ -48,6 +48,9 @@ func (d *DateIndex) MigrateStructure(ctx context.Context, from library.Version) 
 
 // Add will add the given photo to this date index based on its taken time
 func (d *DateIndex) Add(ctx context.Context, photo *library.Photo) error {
+	if photo.SortID == nil {
+		return library.MissingSortID
+	}
 	return d.db.Update(func(tx *bolt.Tx) error {
 		log, _ := logging.FromWithNameAndFields(ctx, "boltdateindex")
 		b := tx.Bucket(datesBucket)

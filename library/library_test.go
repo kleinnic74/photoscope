@@ -2,6 +2,7 @@ package library
 
 import (
 	"fmt"
+	"path/filepath"
 	"testing"
 
 	"encoding/json"
@@ -44,18 +45,19 @@ func TestMarshallJSON(t *testing.T) {
 				ExtendedPhotoID: ExtendedPhotoID{
 					ID: "id",
 				},
-				Path:      "to/file",
-				Format:    domain.MustFormatForExt("jpg"),
-				Location:  gps.MustNewCoordinates(12, 34),
-				DateTaken: time.Now(),
-				Hash:      BinaryHash("1234"),
+				Path: "to/file",
+				PhotoMeta: PhotoMeta{
+					Format:    domain.MustFormatForExt("jpg"),
+					Location:  gps.MustNewCoordinates(12, 34),
+					DateTaken: time.Now(),
+				},
+				Hash: BinaryHash("1234"),
 			},
 			JSON: `{
-  "schema": 4,
   "id": "id",
+  "schema": 6,
   "path": "to/file",
   "format": "jpg",
-  "size": 0,
   "dateUN": %d,
   "gps": {
     "lat": 12,
@@ -89,29 +91,92 @@ func BenchmarkMarshalJSON(b *testing.B) {
 
 func TestCanonicalizePhoto(t *testing.T) {
 	var tests = []struct {
-		photo        domain.Photo
+		photo        PhotoMeta
 		expectedPath string
-		expectedName string
+		expectedID   string
 	}{
-		{domain.NewPhotoFromFields("/some/path/myfile.jpg",
-			at("2015", "02", "24"),
-			somewhere(),
-			"jpg", 1),
+		{
+			// Reference file
+			PhotoMeta{
+				Name:        "/some/path/myfile.jpg",
+				DateTaken:   at("2015", "02", "24"),
+				Location:    somewhere(),
+				Format:      domain.MustFormatForExt("jpg"),
+				Orientation: 1,
+			},
 			"2015/02/24",
-			"myfile.jpg",
+			// Expect some ID
+			"f84a7e9da3f191349ccc603a3e02dba3",
+		},
+		{
+			// Same file name, different path
+			PhotoMeta{
+				Name:        "/my/other/path/myfile.jpg",
+				DateTaken:   at("2015", "02", "24"),
+				Location:    somewhere(),
+				Format:      domain.MustFormatForExt("jpg"),
+				Orientation: 1,
+			},
+			"2015/02/24",
+			// Different ID
+			"e73a6689131af5ef009c21b51d137507",
+		},
+		{
+			// Same base name, different extension
+			PhotoMeta{
+				Name:        "/some/path/myfile.mov",
+				DateTaken:   at("2015", "02", "24"),
+				Location:    somewhere(),
+				Format:      domain.MustFormatForExt("mov"),
+				Orientation: 1,
+			},
+			"2015/02/24",
+			// Different ID
+			"668fe8834f293464e585ad805cdac9a4",
+		},
+		{
+			// No name given
+			PhotoMeta{
+				Name:        "",
+				DateTaken:   at("2015", "02", "24"),
+				Location:    somewhere(),
+				Format:      domain.MustFormatForExt("jpg"),
+				Orientation: 1,
+			},
+			"2015/02/24",
+			// Different ID
+			"a6472197091bf6de095570b06db3e2f3",
+		},
+		{
+			// No name given second time, same parameters
+			PhotoMeta{
+				Name:        "",
+				DateTaken:   at("2015", "02", "24"),
+				Location:    somewhere(),
+				Format:      domain.MustFormatForExt("jpg"),
+				Orientation: 1,
+			},
+			"2015/02/24",
+			// Expect different ID both to referance and previous case
+			"df6b6ca195059ad5733bb708178209c5",
 		},
 	}
 	for _, tt := range tests {
-		actualPath, actualName, id := canonicalizeFilename(tt.photo)
-		assertEquals(t, "name", tt.expectedName, actualName)
-		assertEquals(t, "path", tt.expectedPath, actualPath)
-		assertNotEmpty(t, "id", string(id))
+		t.Run(tt.photo.Name, func(t *testing.T) {
+			actualPath, actualName, id := canonicalizeFilename(tt.photo)
+			ext := filepath.Ext(actualName)[1:]
+			expectedName := fmt.Sprintf("%s.%s", tt.expectedID, tt.photo.Format.ID())
+			assertEquals(t, "extension", tt.photo.Format.ID(), ext)
+			assertEquals(t, "id", tt.expectedID, string(id))
+			assertEquals(t, "path", tt.expectedPath, actualPath)
+			assertEquals(t, "filename", expectedName, actualName)
+		})
 	}
 }
 
 func assertEquals(t *testing.T, name, expected, actual string) {
 	if expected != actual {
-		t.Errorf("Bad %s: expected '%s', got '%s'", name, expected, actual)
+		t.Errorf("Bad value for '%s': expected '%s', got '%s'", name, expected, actual)
 	}
 }
 

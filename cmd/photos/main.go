@@ -5,12 +5,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/pprof"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -30,7 +30,9 @@ import (
 	"bitbucket.org/kleinnic74/photos/logging"
 	"bitbucket.org/kleinnic74/photos/rest"
 	"bitbucket.org/kleinnic74/photos/rest/wdav"
+	"bitbucket.org/kleinnic74/photos/swarm"
 	"bitbucket.org/kleinnic74/photos/tasks"
+	"github.com/kleinnic74/fflags"
 )
 
 var (
@@ -42,6 +44,8 @@ var (
 
 	logger *zap.Logger
 	ctx    context.Context
+
+	eventFeature = fflags.Define("index.events")
 )
 
 func init() {
@@ -52,8 +56,7 @@ func init() {
 	flag.StringVar(&libDir, "l", "gophotos", "Path to photo library")
 	flag.StringVar(&uiDir, "ui", "", "Path to the frontend static assets")
 	flag.UintVar(&port, "p", 8080, "HTTP server port")
-	ctx = logging.Context(context.Background(), nil)
-	logger = logging.From(ctx)
+	logger, ctx = logging.SubFrom(context.Background(), "main")
 
 	flag.Parse()
 
@@ -67,8 +70,14 @@ func init() {
 }
 
 func main() {
+	defer func() {
+		if consts.IsDevMode() {
+			pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
+		}
+	}()
+
 	if err := os.MkdirAll(libDir, os.ModePerm); err != nil {
-		log.Fatal("Failed to create directory", zap.String("dir", libDir), zap.Error(err))
+		logger.Fatal("Failed to create directory", zap.String("dir", libDir), zap.Error(err))
 	}
 
 	signals := make(chan os.Signal, 1)
@@ -80,17 +89,16 @@ func main() {
 		cancel()
 	}()
 
+	router := mux.NewRouter()
+
 	db, err := bolt.Open(filepath.Join(libDir, dbName), 0600, nil)
 	if err != nil {
 		logger.Fatal("Failed to initialize data store", zap.Error(err))
 	}
-	defer db.Close()
-
-	instance, err := NewInstance(db)
-	if err != nil {
-		logger.Fatal("Failed to initialize local instance", zap.Error(err))
-	}
-	logger, ctx = logging.FromWithFields(ctx, zap.String("instance", instance.ID))
+	defer func() {
+		db.Close()
+		logger.Info("Closed data store")
+	}()
 
 	taskRepo := tasks.NewTaskRepository()
 	tasks.RegisterTasks(taskRepo)
@@ -111,7 +119,10 @@ func main() {
 		logger.Fatal("Failed to initialize library", zap.Error(err))
 	}
 
-	lib, err := library.NewBasicPhotoLibrary(libDir, store, domain.LocalThumber{})
+	thumbers := &domain.Thumbers{}
+	thumbers.Add(domain.LocalThumber{}, 1)
+
+	lib, err := library.NewBasicPhotoLibrary(libDir, store, thumbers)
 	if err != nil {
 		logger.Fatal("Failed to initialize library", zap.Error(err))
 	}
@@ -133,11 +144,16 @@ func main() {
 	}
 	migrator.AddStructure("date", dateindex)
 
-	eventindex, err := boltstore.NewEventIndex(db)
-	if err != nil {
-		logger.Fatal("Failed to initialize event database")
-	}
-	classification.RegisterTasks(taskRepo, eventindex)
+	fflags.IfEnabled(eventFeature, func() error {
+		eventindex, err := boltstore.NewEventIndex(db)
+		if err != nil {
+			return fmt.Errorf("Failed to initialize event database: %w", err)
+		}
+		classification.RegisterTasks(taskRepo, eventindex)
+		events := rest.NewEventsHandler(eventindex, lib)
+		events.InitRoutes(router)
+		return nil
+	})
 
 	bus := events.NewStream()
 	go bus.Dispatch(ctx)
@@ -159,8 +175,19 @@ func main() {
 
 	go launchStartupTasks(ctx, taskRepo, executor)
 
+	instance, err := NewInstance(ctx, lib.ID, DefaultInstanceProperties()...)
+	if err != nil {
+		logger.Fatal("Failed to initialize library unique ID", zap.Error(err))
+	}
+	logger, ctx = logging.FromWithFields(ctx, zap.String("instance", instance.ID))
+
+	peers, err := swarm.NewController(instance, port)
+	peers.OnPeerDetected(swarm.SkipSelf(addRemoteThumber(instance.ID, thumbers)))
+	peers.OnPeerDetected(swarm.SkipSelf(addRemoteSync(executor)))
+
+	go peers.ListenAndServe(ctx)
+
 	// REST Handlers
-	router := mux.NewRouter()
 
 	metrics := rest.NewMetricsHandler()
 	metrics.InitRoutes(router)
@@ -188,11 +215,14 @@ func main() {
 	tasksApp := rest.NewTaskHandler(taskRepo, executor)
 	tasksApp.InitRoutes(router)
 
-	events := rest.NewEventsHandler(eventindex, lib)
-	events.InitRoutes(router)
-
 	indexesRest := rest.NewIndexes(indexer, migrator)
 	indexesRest.Init(router)
+
+	peersRest := rest.NewPeersAPI(peers)
+	peersRest.InitRoutes(router)
+
+	thumbService := rest.NewThumberAPI(domain.LocalThumber{})
+	thumbService.InitRoutes(router)
 
 	tmpdir := filepath.Join(libDir, "tmp")
 	wdav, err := wdav.NewWebDavHandler(tmpdir, backgroundImport(executor))
@@ -240,12 +270,14 @@ func main() {
 
 	logger.Info("Stopping server...")
 
+	peers.Shutdown()
+
 	ctxShutdown, cancelServerShutdown := context.WithTimeout(ctx, 5*time.Second)
 	defer func() {
 		cancelServerShutdown()
 	}()
 	if err := server.Shutdown(ctxShutdown); err != nil {
-		logger.Fatal(("Failed to shutdown HTTP server"), zap.Error(err))
+		logger.Error("Failed to shutdown HTTP server", zap.Error(err))
 	}
 
 	logger.Info("Terminated gracefully")
@@ -271,5 +303,21 @@ func backgroundImport(executor tasks.TaskExecutor) wdav.UploadedFunc {
 		if _, err := executor.Submit(ctx, task); err != nil {
 			logging.From(ctx).Warn("Could not import file", zap.String("path", path), zap.Error(err))
 		}
+	}
+}
+
+func addRemoteThumber(self string, thumbers *domain.Thumbers) swarm.PeerHandler {
+	return func(ctx context.Context, peer swarm.Peer) {
+		if self == peer.ID {
+			// Do not add ourselves as remote thumber
+			return
+		}
+		thumber, err := swarm.NewRemoteThumber(fmt.Sprintf("%s/thumb", peer.URL), domain.JPEG)
+		if err != nil {
+			logging.From(ctx).Warn("Failed to create remote thumber", zap.Error(err))
+			return
+		}
+		logging.From(ctx).Info("Remote thumber added", zap.String("peer.url", peer.URL))
+		thumbers.Add(thumber, 1)
 	}
 }

@@ -39,12 +39,13 @@ func TestGetTaskDefinitions(t *testing.T) {
 
 func TestPostTask(t *testing.T) {
 	repo := tasks.NewTaskRepository()
+	importer.RegisterTasks(repo)
 	executor := tasks.NewDummyTaskExecutor()
 	api := NewTaskHandler(repo, executor)
 	router := mux.NewRouter()
 	api.InitRoutes(router)
 
-	payload := `{"type":"import","parameters":{"importdir":"from","dryrun":true}}`
+	payload := `{"type":"importFile","parameters":{"importdir":"from","dryrun":true}}`
 	req, _ := http.NewRequest(http.MethodPost, "/tasks", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 

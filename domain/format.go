@@ -153,6 +153,15 @@ func FormatForExt(ext string) (Format, bool) {
 	return f, found
 }
 
+func FormatForMime(mime string) (Format, bool) {
+	for _, f := range formatsById {
+		if mime == f.Mime() {
+			return f, true
+		}
+	}
+	return nil, false
+}
+
 func MustFormatForExt(ext string) FormatSpec {
 	if ext == "" {
 		return FormatSpec("")
