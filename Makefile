@@ -9,16 +9,20 @@ PLATFORMS=darwin win linux arm
 
 BINARY_linux=$(BINDIR)/linux/$(APPNAME)
 BINARY_darwin=$(BINDIR)/darwin/$(APPNAME)
-BINARY_win=$(BINDIR)/win/$(APPNAME).exe
+BINARY_windows=$(BINDIR)/win/$(APPNAME).exe
 BINARY_arm=$(BINDIR)/arm/$(APPNAME)
 
 TOOLS=./cmd/dbinspect ./cmd/dircheck ./cmd/exifprint
 
 PKG=./cmd/photos
 
-OS=$(shell uname -s | tr '[:upper:]' '[:lower:]')
-BINARIES=$(BINARY_win) $(BINARY_arm) $(BINARY_linux) $(BINARY_darwin) $(TOOLS)
-BINARY_MAIN=$(BINARY_$(OS))
+ifeq ($(OS), Windows_NT)
+	uname := windows
+else
+	uname := $(shell uname -s | tr '[:upper:]' '[:lower:]')
+endif
+BINARIES=$(BINARY_windows) $(BINARY_arm) $(BINARY_linux) $(BINARY_darwin) $(TOOLS)
+BINARY_MAIN:=$(BINARY_$(uname))
 
 FRONTEND=frontend/
 
@@ -85,6 +89,7 @@ run: _run
 
 .PHONY: _run
 _run: $(BINARY_MAIN) $(TMPDIR)
+	@echo OS=$(uname) binary=$(BINARY_MAIN)
 	rm -f $(TMPDIR)/log.json
 	cd $(TMPDIR) && ../$(BINARY_MAIN) -ui ../frontend/build
 
@@ -124,13 +129,10 @@ $(GOBIN)/go-test-report: $(GOBIN) $(TMPDIR)
 $(GOBIN):
 	mkdir -p $@
 
-$(TMPDIR)/deptree.svg:
-	godepgraph -s ./cmd/photos | dot -Tsvg >deptree.svg
-
 .PHONY: dist
 dist: $(BINARIES)
 	@mkdir -p dist
-	@echo os=$(OS) binary_main=$(BINARY_MAIN)
+	@echo os=$(uname) binary_main=$(BINARY_MAIN)
 	for p in $(PLATFORMS); do \
 	    echo Building dist for $$p... ; \
 		files=$$(cd $(BINDIR)/$$p && find . -type f) ; \
