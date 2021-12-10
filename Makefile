@@ -124,7 +124,7 @@ $(TMPDIR)/deptree.svg: $(BINARY_MAIN) $(TMPDIR)
 	goda graph "./cmd/photos:all" | dot -Tsvg -o $@
 
 $(GOBIN)/go-test-report: $(GOBIN) $(TMPDIR)
-	GOBIN=$(GOBIN) go install github.com/vakenbolt/go-test-report/
+	GOBIN=$(GOBIN) GO111MODULE=off go get github.com/vakenbolt/go-test-report
 
 $(GOBIN):
 	mkdir -p $@
