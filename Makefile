@@ -37,7 +37,7 @@ GO_WIN=CGO_ENABLED=0 GOOS=windows
 GO_UX=CGO_ENABLED=0 GOOS=linux
 GO_OSX=CGO_ENABLED=0 GOOS=darwin
 
-GOBIN = $(shell realpath $(BINDIR)/tools)
+GOBIN = $(shell realpath $(BINDIR))/tools
 
 .PHONY: all
 all: build frontend/build
@@ -124,7 +124,7 @@ $(TMPDIR)/deptree.svg: $(BINARY_MAIN) $(TMPDIR)
 	goda graph "./cmd/photos:all" | dot -Tsvg -o $@
 
 $(GOBIN)/go-test-report: $(GOBIN) $(TMPDIR)
-	GOBIN=$(GOBIN) GO111MODULE=off go get -u github.com/vakenbolt/go-test-report/
+	GOBIN=$(GOBIN) go install github.com/vakenbolt/go-test-report/
 
 $(GOBIN):
 	mkdir -p $@
