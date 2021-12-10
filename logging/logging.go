@@ -3,6 +3,7 @@ package logging
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 
 	"bitbucket.org/kleinnic74/photos/consts"
@@ -18,7 +19,18 @@ const (
 	errorLog  = false
 )
 
-var rootLogger *zap.Logger
+var (
+	logBuffer LogsExporter
+
+	rootLogger *zap.Logger
+)
+
+func Dump(w io.Writer, revert bool) error {
+	if logBuffer == nil {
+		return nil
+	}
+	return logBuffer.Export(w, revert)
+}
 
 func init() {
 	devmode := consts.IsDevMode()
@@ -51,6 +63,10 @@ func init() {
 		consoleEncoder := zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())
 		console := zapcore.Lock(os.Stdout)
 		cores = append(cores, zapcore.NewCore(consoleEncoder, console, debugFilter))
+		logsInMemory := NewMemoryLogger(500)
+		logBuffer = logsInMemory.(LogsExporter)
+
+		cores = append(cores, zapcore.NewCore(consoleEncoder, zapcore.Lock(logsInMemory), debugFilter))
 		fileFilter = debugFilter
 	} else {
 		fileFilter = infoFilter

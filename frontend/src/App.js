@@ -23,8 +23,7 @@ export default class App extends Component {
   }
 
   render() {
-    //const baseURL = document.baseURI
-    const baseURL = "http://localhost:8080" 
+    const baseURL = document.baseURI
     console.log("Base URL", baseURL, "filter", this.state.filter)
     return (
       <div className="App">
