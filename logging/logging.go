@@ -79,8 +79,8 @@ func init() {
 	cores = append(cores, zapcore.NewCore(jsonEncoder, zapcore.Lock(logfile), fileFilter))
 
 	// Loggly
-	loggly := NewLogglySink("e8e5b948-f0d9-4c99-ae02-09f17a48d7ac")
-	cores = append(cores, zapcore.NewCore(NewLogglyEncoder(), loggly, fileFilter))
+	// loggly := NewLogglySink("e8e5b948-f0d9-4c99-ae02-09f17a48d7ac")
+	// cores = append(cores, zapcore.NewCore(NewLogglyEncoder(), loggly, fileFilter))
 
 	rootLogger = zap.New(zapcore.NewTee(cores...))
 	rootLogger.With(zap.Bool("devmode", devmode)).Info("Logging initialized")
