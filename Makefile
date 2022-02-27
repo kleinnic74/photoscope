@@ -12,7 +12,7 @@ BINARY_darwin=$(BINDIR)/darwin/$(APPNAME)
 BINARY_windows=$(BINDIR)/win/$(APPNAME).exe
 BINARY_arm=$(BINDIR)/arm/$(APPNAME)
 
-TOOLS=./cmd/dbinspect ./cmd/dircheck ./cmd/exifprint
+TOOLS=./cmd/dbinspect ./cmd/dircheck ./cmd/exifprint ./cmd/qtdump
 
 PKG=./cmd/photos
 

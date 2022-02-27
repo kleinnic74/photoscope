@@ -100,8 +100,10 @@ func (c *Cache) ReverseGeocode(ctx context.Context, lat, lon float64) (*gps.Addr
 	place, found, err := c.delegate.ReverseGeocode(ctx, lat, lon)
 	if found && place.BoundingBox != nil {
 		c.add(*place.BoundingBox, place)
-	} else {
+	} else if found {
 		log.Info("Place has no bounding box", zap.Stringer("place", place.ID))
+	} else {
+		log.Info("Place not found", zap.Float64("lat", lat), zap.Float64("long", lon))
 	}
 	return place, found, err
 }

@@ -1,7 +1,6 @@
 package library
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -34,8 +33,11 @@ type BasicPhotoLibrary struct {
 	ID       LibraryID
 	basedir  string
 	photodir string
-	dirMode  os.FileMode
-	db       ClosableStore
+
+	dirMode os.FileMode
+	db      ClosableStore
+
+	mediaLoader Loader
 
 	thumbdir    string
 	thumber     domain.Thumber
@@ -91,17 +93,23 @@ func NewBasicPhotoLibrary(basedir string, store ClosableStore, thumber domain.Th
 	if err := os.MkdirAll(thumbsDir, defaultDirMode); err != nil {
 		return nil, err
 	}
+	tmpDir := filepath.Join(absdir, "tmp", "loader")
+	if err := os.MkdirAll(tmpDir, defaultDirMode); err != nil {
+		return nil, err
+	}
 	idFilename := filepath.Join(absdir, "ID")
 	dbid, err := loadOrCreateLibraryID(idFilename)
 	if err != nil {
 		return nil, err
 	}
 	return &BasicPhotoLibrary{
-		ID:       dbid,
-		basedir:  absdir,
-		photodir: photosDir,
-		dirMode:  defaultDirMode,
-		db:       store,
+		ID:          dbid,
+		basedir:     absdir,
+		photodir:    photosDir,
+		mediaLoader: NewLoader(tmpDir),
+
+		dirMode: defaultDirMode,
+		db:      store,
 
 		thumbdir:    thumbsDir,
 		thumbFormat: domain.MustFormatForExt("jpg"),
@@ -119,15 +127,20 @@ func (lib *BasicPhotoLibrary) Add(ctx context.Context, photo PhotoMeta, content 
 	ctx = logging.Context(ctx, logging.From(ctx).Named("library").With(zap.String("source", photo.Name)))
 	targetDir, name, id := canonicalizeFilename(photo)
 	orderedID := orderedIDOf(photo.DateTaken.UTC(), id)
-	content, hash, err := LoadContent(content)
+	media, err := lib.mediaLoader.LoadMediaObject(name, content)
 	if err != nil {
 		return err
 	}
-	if dup, exists := lib.db.Exists(hash); exists {
+	defer media.Cleanup()
+	if dup, exists := lib.db.Exists(media.Hash()); exists {
 		return PhotoAlreadyExists(dup)
 	}
-	size, err := lib.addPhotoFile(ctx, content, lib.photodir, targetDir, name)
-	if err != nil {
+	var size int64
+	if err := media.ProcessContent(func(in io.Reader) error {
+		s, err := lib.addPhotoFile(ctx, in, lib.photodir, targetDir, name)
+		size = s
+		return err
+	}); err != nil {
 		return err
 	}
 	path := filepath.Join(targetDir, name)
@@ -140,7 +153,7 @@ func (lib *BasicPhotoLibrary) Add(ctx context.Context, photo PhotoMeta, content 
 
 		PhotoMeta: photo,
 		Size:      size,
-		Hash:      hash,
+		Hash:      media.Hash(),
 	}
 	logging.From(ctx).Info("Added", zap.String("photo", string(id)), zap.Any("location", p.Location))
 	if err := lib.db.Add(p); err != nil {
@@ -315,17 +328,6 @@ func canonicalizeFilename(photo PhotoMeta) (dir, filename string, id PhotoID) {
 	id = PhotoID(fmt.Sprintf("%x", h.Sum(nil)))
 	filename = fmt.Sprintf("%s.%s", id, photo.Format.ID())
 	return
-}
-
-func LoadContent(in io.Reader) (io.Reader, BinaryHash, error) {
-	h := mmh3.New128()
-	in = io.TeeReader(in, h)
-	content := new(bytes.Buffer)
-	if _, err := io.Copy(content, in); err != nil {
-		return nil, "", err
-	}
-	hash := BinaryHash(base64.StdEncoding.EncodeToString(h.Sum(nil)))
-	return content, hash, nil
 }
 
 func ComputeHash(in io.Reader) (BinaryHash, error) {

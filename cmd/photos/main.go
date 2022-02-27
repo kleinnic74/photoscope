@@ -46,6 +46,7 @@ var (
 	ctx    context.Context
 
 	eventFeature = fflags.Define("index.events")
+	geoFeature   = fflags.Define("index.geo")
 )
 
 func init() {
@@ -165,7 +166,10 @@ func main() {
 
 	indexer := index.NewIndexer(indexTracker, executor)
 	indexer.RegisterDirect("date", boltstore.DateIndexVersion, dateindex.Add)
-	indexer.RegisterDefered("geo", boltstore.GeoIndexVersion, geocoder.LookupPhotoOnAdd)
+	fflags.IfEnabled(geoFeature, func() error {
+		indexer.RegisterDefered("geo", boltstore.GeoIndexVersion, geocoder.LookupPhotoOnAdd)
+		return nil
+	})
 
 	indexer.RegisterTasks(taskRepo)
 
@@ -195,6 +199,8 @@ func main() {
 	if consts.IsDevMode() {
 		logs := rest.NewLogsHandler()
 		logs.InitRoutes(router)
+		debugService := DebugHandler{}
+		debugService.InitRoutes(router)
 	}
 
 	sse := rest.NewSSEHandler(bus)
@@ -253,6 +259,7 @@ func main() {
 			}
 		}
 	}
+
 	server := http.Server{
 		Addr:        fmt.Sprintf(":%d", port),
 		Handler:     rest.WithMiddleWares(router, "rest"),

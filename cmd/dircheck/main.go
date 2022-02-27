@@ -102,6 +102,13 @@ func main() {
 		logger.Fatal("Failed to initialize library", zap.Error(err))
 	}
 
+	tmpDir, err := os.MkdirTemp("", "dircheck*")
+	if err != nil {
+		logger.Fatal("Failed to create temporary directory", zap.Error(err))
+	}
+	defer func() { os.Remove(tmpDir) }()
+	loader := library.NewLoader(tmpDir)
+
 	var count int
 	for _, dir := range flag.Args() {
 		err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
@@ -126,11 +133,13 @@ func main() {
 				}
 				defer in.Close()
 				count++
-				_, hash, err := library.LoadContent(in)
+				tmpName := fmt.Sprintf("img-%d", count)
+				media, err := loader.LoadMediaObject(tmpName, in)
 				if err != nil {
 					return err
 				}
-				if id, found := store.Exists(hash); found {
+				defer media.Cleanup()
+				if id, found := store.Exists(media.Hash()); found {
 					logger.Info("File in library", zap.String("path", path), zap.String("id", string(id)))
 				} else {
 					if verbose {
