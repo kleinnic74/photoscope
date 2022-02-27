@@ -15,6 +15,7 @@
 tmp
 
 /testdata
+/dist
 
 # Log files
 log.json
