@@ -71,6 +71,7 @@ func init() {
 }
 
 func main() {
+	ctx, cancel := context.WithCancel(ctx)
 	defer func() {
 		if consts.IsDevMode() {
 			pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
@@ -83,7 +84,6 @@ func main() {
 
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt)
-	ctx, cancel := context.WithCancel(ctx)
 	go func() {
 		oscall := <-signals
 		logger.Info("Received signal", zap.Any("signal", oscall))
@@ -121,7 +121,9 @@ func main() {
 	}
 
 	thumbers := &domain.Thumbers{}
-	thumbers.Add(domain.LocalThumber{}, 1)
+	nbParallelThumbers := domain.CalculateOptimumParallelism()
+	thumbers.Add(domain.NewParallelThumber(ctx, domain.LocalThumber{}, nbParallelThumbers), 1)
+	logger.Info("Initialized Thumber", zap.Int("parallelism", nbParallelThumbers))
 
 	lib, err := library.NewBasicPhotoLibrary(libDir, store, thumbers)
 	if err != nil {

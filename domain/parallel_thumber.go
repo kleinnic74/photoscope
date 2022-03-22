@@ -1,8 +1,10 @@
 package domain
 
 import (
+	"context"
 	"image"
 	"io"
+	"runtime"
 )
 
 type thumbRequest struct {
@@ -25,13 +27,17 @@ type parallelThumber struct {
 	requests chan thumbRequest
 }
 
-func NewParallelThumber(delegate Thumber, n int) Thumber {
+func CalculateOptimumParallelism() int {
+	return runtime.NumCPU()
+}
+
+func NewParallelThumber(ctx context.Context, delegate Thumber, n int) Thumber {
 	thumber := &parallelThumber{
 		delegate: delegate,
 		requests: make(chan thumbRequest),
 	}
 	for i := 0; i < n; i++ {
-		go thumber.loop()
+		go thumber.loop(ctx)
 	}
 	return thumber
 }
@@ -45,9 +51,14 @@ func (t *parallelThumber) CreateThumb(in io.Reader, f Format, o Orientation, siz
 	return result.img, result.err
 }
 
-func (t *parallelThumber) loop() {
-	for req := range t.requests {
-		req.resp <- t.makeThumb(req)
+func (t *parallelThumber) loop(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case req := <-t.requests:
+			req.resp <- t.makeThumb(req)
+		}
 	}
 }
 
