@@ -25,7 +25,7 @@ type serialTaskExecutor struct {
 	queryCh  chan executionQuery
 	running  bool
 
-	photos library.PhotoLibrary
+	photos library.PhotoLibrary // TODO: this should not be a field of the executor
 }
 
 func NewSerialTaskExecutor(photos library.PhotoLibrary) TaskExecutor {

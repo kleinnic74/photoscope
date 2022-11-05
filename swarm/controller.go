@@ -18,7 +18,7 @@ const (
 
 type Peer struct {
 	Name       string            `json:"name"`
-	ID         string            `json:"id"`
+	ID         InstanceID        `json:"id"`
 	URL        string            `json:"url"`
 	Type       string            `json:"service"`
 	Properties map[string]string `json:"properties,omitempty"`
@@ -151,7 +151,7 @@ func (c *Controller) peerDiscovered(ctx context.Context, p *zeroconf.ServiceEntr
 		c.peers[peer.Name] = peer
 		logging.From(ctx).Info("Peer detected",
 			zap.String("peer.instance", peer.Name),
-			zap.String("peer.ID", peer.ID),
+			zap.Stringer("peer.ID", peer.ID),
 			zap.String("peer.URL", peer.URL),
 			zap.String("peer.type", peer.Type),
 			zap.String("peer.hostname", p.HostName),
@@ -172,14 +172,14 @@ func asURL(p *zeroconf.ServiceEntry) string {
 	return ""
 }
 
-func findID(txt []string) string {
+func findID(txt []string) InstanceID {
 	for _, t := range txt {
 		kv := strings.SplitN(t, "=", 2)
 		if len(kv) != 2 {
 			continue
 		}
 		if kv[0] == "id" {
-			return kv[1]
+			return InstanceID(kv[1])
 		}
 	}
 	return ""

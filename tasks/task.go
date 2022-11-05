@@ -12,7 +12,7 @@ import (
 
 type Task interface {
 	Describe() string
-	Execute(context.Context, TaskExecutor, library.PhotoLibrary) error
+	Execute(context.Context, TaskExecutor, library.PhotoLibrary) error // TODO: PhotoLibrary should not be here
 }
 
 type DeferredNewPhotoCallback func(ctx context.Context, photo *library.Photo) (Task, bool)

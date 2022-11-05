@@ -91,7 +91,7 @@ run: _run
 _run: $(BINARY_MAIN) $(TMPDIR)
 	@echo OS=$(uname) binary=$(BINARY_MAIN)
 	rm -f $(TMPDIR)/log.json
-	cd $(TMPDIR) && ../$(BINARY_MAIN) -ui ../frontend/build
+	cd $(TMPDIR) && ../$(BINARY_MAIN)
 
 .PHONY: rundev
 rundev: GO_DEBUG_VAR=-X 'bitbucket.org/kleinnic74/photos/consts.devmode=true'

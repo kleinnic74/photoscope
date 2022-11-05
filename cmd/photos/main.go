@@ -5,34 +5,21 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime/pprof"
-	"time"
 
-	"github.com/gorilla/mux"
-	bolt "go.etcd.io/bbolt"
 	"go.uber.org/zap"
 
-	"bitbucket.org/kleinnic74/photos/classification"
+	"bitbucket.org/kleinnic74/photos/app"
 	"bitbucket.org/kleinnic74/photos/consts"
 	"bitbucket.org/kleinnic74/photos/domain"
-	"bitbucket.org/kleinnic74/photos/events"
-	"bitbucket.org/kleinnic74/photos/geocoding"
-	"bitbucket.org/kleinnic74/photos/geocoding/openstreetmap"
 	"bitbucket.org/kleinnic74/photos/importer"
-	"bitbucket.org/kleinnic74/photos/index"
-	"bitbucket.org/kleinnic74/photos/library"
-	"bitbucket.org/kleinnic74/photos/library/boltstore"
 	"bitbucket.org/kleinnic74/photos/logging"
-	"bitbucket.org/kleinnic74/photos/rest"
 	"bitbucket.org/kleinnic74/photos/rest/wdav"
 	"bitbucket.org/kleinnic74/photos/swarm"
 	"bitbucket.org/kleinnic74/photos/tasks"
-	"github.com/kleinnic74/fflags"
 )
 
 var (
@@ -45,8 +32,7 @@ var (
 	logger *zap.Logger
 	ctx    context.Context
 
-	eventFeature = fflags.Define("index.events")
-	geoFeature   = fflags.Define("index.geo")
+	options app.Options
 )
 
 func init() {
@@ -54,9 +40,9 @@ func init() {
 		fmt.Fprintf(os.Stderr, "Usage: %s  [options]\n", os.Args[0])
 		flag.PrintDefaults()
 	}
+	var libDir string
 	flag.StringVar(&libDir, "l", "gophotos", "Path to photo library")
-	flag.StringVar(&uiDir, "ui", "", "Path to the frontend static assets")
-	flag.UintVar(&port, "p", 8080, "HTTP server port")
+	flag.UintVar(&options.Port, "p", 8080, "HTTP server port")
 	logger, ctx = logging.SubFrom(context.Background(), "main")
 
 	flag.Parse()
@@ -65,12 +51,12 @@ func init() {
 	if err != nil {
 		logger.Fatal("Could not determine path", zap.String("dir", libDir), zap.Error(err))
 	}
-	libDir = absdir
+	options.LibDir = absdir
 	logger.Info("Photoscope starting", zap.String("gitCommit", consts.GitCommit), zap.String("gitRepo", consts.GitRepo))
-	logger.Info("Library directory", zap.String("dir", libDir))
 }
 
 func main() {
+
 	ctx, cancel := context.WithCancel(ctx)
 	defer func() {
 		if consts.IsDevMode() {
@@ -78,8 +64,9 @@ func main() {
 		}
 	}()
 
-	if err := os.MkdirAll(libDir, os.ModePerm); err != nil {
-		logger.Fatal("Failed to create directory", zap.String("dir", libDir), zap.Error(err))
+	a, err := app.NewApp(ctx, options)
+	if err != nil {
+		logger.Fatal("Failed to initialize app", zap.Error(err))
 	}
 
 	signals := make(chan os.Signal, 1)
@@ -90,206 +77,208 @@ func main() {
 		cancel()
 	}()
 
-	router := mux.NewRouter()
+	a.Run(ctx)
 
-	db, err := bolt.Open(filepath.Join(libDir, dbName), 0600, nil)
-	if err != nil {
-		logger.Fatal("Failed to initialize data store", zap.Error(err))
-	}
-	defer func() {
-		db.Close()
-		logger.Info("Closed data store")
-	}()
+	// router := mux.NewRouter()
 
-	taskRepo := tasks.NewTaskRepository()
-	tasks.RegisterTasks(taskRepo)
-	importer.RegisterTasks(taskRepo)
+	// db, err := bolt.Open(filepath.Join(libDir, dbName), 0600, nil)
+	// if err != nil {
+	// 	logger.Fatal("Failed to initialize data store", zap.Error(err))
+	// }
+	// defer func() {
+	// 	db.Close()
+	// 	logger.Info("Closed data store")
+	// }()
 
-	migrator, err := index.NewMigrationCoordinator(db)
-	if err != nil {
-		logger.Fatal("Failed to initialize migration coordinator", zap.Error(err))
-	}
+	// taskRepo := tasks.NewTaskRepository()
+	// tasks.RegisterTasks(taskRepo)
+	// importer.RegisterTasks(taskRepo)
 
-	indexTracker, err := boltstore.NewIndexTracker(db)
-	if err != nil {
-		logger.Fatal("Failed to initialize library", zap.Error(err))
-	}
+	// migrator, err := index.NewMigrationCoordinator(db)
+	// if err != nil {
+	// 	logger.Fatal("Failed to initialize migration coordinator", zap.Error(err))
+	// }
 
-	store, err := boltstore.NewBoltStore(db)
-	if err != nil {
-		logger.Fatal("Failed to initialize library", zap.Error(err))
-	}
+	// indexTracker, err := boltstore.NewIndexTracker(db)
+	// if err != nil {
+	// 	logger.Fatal("Failed to initialize library", zap.Error(err))
+	// }
 
-	thumbers := &domain.Thumbers{}
-	nbParallelThumbers := domain.CalculateOptimumParallelism()
-	thumbers.Add(domain.NewParallelThumber(ctx, domain.LocalThumber{}, nbParallelThumbers), 1)
-	logger.Info("Initialized Thumber", zap.Int("parallelism", nbParallelThumbers))
+	// store, err := boltstore.NewBoltStore(db)
+	// if err != nil {
+	// 	logger.Fatal("Failed to initialize library", zap.Error(err))
+	// }
 
-	lib, err := library.NewBasicPhotoLibrary(libDir, store, thumbers)
-	if err != nil {
-		logger.Fatal("Failed to initialize library", zap.Error(err))
-	}
-	logger.Info("Opened photo library", zap.String("path", libDir))
-	migrator.AddInstances(lib)
+	// thumbers := &domain.Thumbers{}
+	// nbParallelThumbers := domain.CalculateOptimumParallelism()
+	// thumbers.Add(domain.NewParallelThumber(ctx, domain.LocalThumber{}, nbParallelThumbers), 1)
+	// logger.Info("Initialized Thumber", zap.Int("parallelism", nbParallelThumbers))
 
-	geoindex, err := boltstore.NewBoltGeoIndex(db)
-	if err != nil {
-		logger.Fatal("Failed to initialize geoindex", zap.Error(err))
-	}
-	migrator.AddStructure("geo", geoindex)
+	// lib, err := library.NewBasicPhotoLibrary(libDir, store, thumbers)
+	// if err != nil {
+	// 	logger.Fatal("Failed to initialize library", zap.Error(err))
+	// }
+	// logger.Info("Opened photo library", zap.String("path", libDir))
+	// migrator.AddInstances(lib)
 
-	geocoder := geocoding.NewGeocoder(geoindex, openstreetmap.NewResolver("de,en"))
-	geocoder.RegisterTasks(taskRepo)
+	// geoindex, err := boltstore.NewBoltGeoIndex(db)
+	// if err != nil {
+	// 	logger.Fatal("Failed to initialize geoindex", zap.Error(err))
+	// }
+	// migrator.AddStructure("geo", geoindex)
 
-	dateindex, err := boltstore.NewDateIndex(db)
-	if err != nil {
-		logger.Fatal("Failed to initialize dataindex", zap.Error(err))
-	}
-	migrator.AddStructure("date", dateindex)
+	// geocoder := geocoding.NewGeocoder(geoindex, openstreetmap.NewResolver("de,en"))
+	// geocoder.RegisterTasks(taskRepo)
 
-	fflags.IfEnabled(eventFeature, func() error {
-		eventindex, err := boltstore.NewEventIndex(db)
-		if err != nil {
-			return fmt.Errorf("Failed to initialize event database: %w", err)
-		}
-		classification.RegisterTasks(taskRepo, eventindex)
-		events := rest.NewEventsHandler(eventindex, lib)
-		events.InitRoutes(router)
-		return nil
-	})
+	// dateindex, err := boltstore.NewDateIndex(db)
+	// if err != nil {
+	// 	logger.Fatal("Failed to initialize dataindex", zap.Error(err))
+	// }
+	// migrator.AddStructure("date", dateindex)
 
-	bus := events.NewStream()
-	go bus.Dispatch(ctx)
+	// fflags.IfEnabled(eventFeature, func() error {
+	// 	eventindex, err := boltstore.NewEventIndex(db)
+	// 	if err != nil {
+	// 		return fmt.Errorf("Failed to initialize event database: %w", err)
+	// 	}
+	// 	classification.RegisterTasks(taskRepo, eventindex)
+	// 	events := rest.NewEventsHandler(eventindex, lib)
+	// 	events.InitRoutes(router)
+	// 	return nil
+	// })
 
-	executor := tasks.NewSerialTaskExecutor(lib)
-	go executor.DrainTasks(ctx, func(e tasks.Execution) {
-		bus.Publish(events.Event{Name: "tasks", Action: "completed"})
-	})
+	// bus := events.NewStream()
+	// go bus.Dispatch(ctx)
 
-	indexer := index.NewIndexer(indexTracker, executor)
-	indexer.RegisterDirect("date", boltstore.DateIndexVersion, dateindex.Add)
-	fflags.IfEnabled(geoFeature, func() error {
-		indexer.RegisterDefered("geo", boltstore.GeoIndexVersion, geocoder.LookupPhotoOnAdd)
-		return nil
-	})
+	// executor := tasks.NewSerialTaskExecutor(lib)
+	// go executor.DrainTasks(ctx, func(e tasks.Execution) {
+	// 	bus.Publish(events.Event{Name: "tasks", Action: "completed"})
+	// })
 
-	indexer.RegisterTasks(taskRepo)
+	// indexer := index.NewIndexer(indexTracker, executor)
+	// indexer.RegisterDirect("date", boltstore.DateIndexVersion, dateindex.Add)
+	// fflags.IfEnabled(geoFeature, func() error {
+	// 	indexer.RegisterDefered("geo", boltstore.GeoIndexVersion, geocoder.LookupPhotoOnAdd)
+	// 	return nil
+	// })
 
-	RegisterMigrationTask(taskRepo, migrator, indexer)
+	// indexer.RegisterTasks(taskRepo)
 
-	lib.AddCallback(indexer.Add)
+	// RegisterMigrationTask(taskRepo, migrator, indexer)
 
-	go launchStartupTasks(ctx, taskRepo, executor)
+	// lib.AddCallback(indexer.Add)
 
-	instance, err := NewInstance(ctx, lib.ID, DefaultInstanceProperties()...)
-	if err != nil {
-		logger.Fatal("Failed to initialize library unique ID", zap.Error(err))
-	}
-	logger, ctx = logging.FromWithFields(ctx, zap.String("instance", instance.ID))
+	// go launchStartupTasks(ctx, taskRepo, executor)
 
-	peers, err := swarm.NewController(instance, port)
-	peers.OnPeerDetected(swarm.SkipSelf(addRemoteThumber(instance.ID, thumbers)))
-	peers.OnPeerDetected(swarm.SkipSelf(addRemoteSync(executor)))
+	// instance, err := swarm.NewInstance(ctx, swarm.InstanceID(lib.ID), DefaultInstanceProperties()...)
+	// if err != nil {
+	// 	logger.Fatal("Failed to initialize library unique ID", zap.Error(err))
+	// }
+	// logger, ctx = logging.FromWithFields(ctx, zap.Stringer("instance", instance.ID))
 
-	go peers.ListenAndServe(ctx)
+	// peers, err := swarm.NewController(instance, port)
+	// peers.OnPeerDetected(swarm.SkipSelf(addRemoteThumber(instance.ID, thumbers)))
+	// peers.OnPeerDetected(swarm.SkipSelf(addRemoteSync(executor)))
 
-	// REST Handlers
+	// go peers.ListenAndServe(ctx)
 
-	metrics := rest.NewMetricsHandler()
-	metrics.InitRoutes(router)
+	// // REST Handlers
 
-	if consts.IsDevMode() {
-		logs := rest.NewLogsHandler()
-		logs.InitRoutes(router)
-		debugService := DebugHandler{}
-		debugService.InitRoutes(router)
-	}
+	// metrics := rest.NewMetricsHandler()
+	// metrics.InitRoutes(router)
 
-	sse := rest.NewSSEHandler(bus)
-	sse.InitRoutes(router)
+	// if consts.IsDevMode() {
+	// 	logs := rest.NewLogsHandler()
+	// 	logs.InitRoutes(router)
+	// 	debugService := DebugHandler{}
+	// 	debugService.InitRoutes(router)
+	// }
 
-	photoApp := rest.NewApp(lib)
-	photoApp.InitRoutes(router)
+	// sse := rest.NewSSEHandler(bus)
+	// sse.InitRoutes(router)
 
-	timeline := rest.NewTimelineHandler(dateindex, lib)
-	timeline.InitRoutes(router)
+	// photoApp := rest.NewApp(lib)
+	// photoApp.InitRoutes(router)
 
-	geo := rest.NewGeoHandler(geoindex, lib)
-	geo.InitRoutes(router)
+	// timeline := rest.NewTimelineHandler(dateindex, lib)
+	// timeline.InitRoutes(router)
 
-	geocache := rest.NewGeoCacheHandler(geocoder.Cache)
-	geocache.InitRoutes(router)
+	// geo := rest.NewGeoHandler(geoindex, lib)
+	// geo.InitRoutes(router)
 
-	tasksApp := rest.NewTaskHandler(taskRepo, executor)
-	tasksApp.InitRoutes(router)
+	// geocache := rest.NewGeoCacheHandler(geocoder.Cache)
+	// geocache.InitRoutes(router)
 
-	indexesRest := rest.NewIndexes(indexer, migrator)
-	indexesRest.Init(router)
+	// tasksApp := rest.NewTaskHandler(taskRepo, executor)
+	// tasksApp.InitRoutes(router)
 
-	peersRest := rest.NewPeersAPI(peers)
-	peersRest.InitRoutes(router)
+	// indexesRest := rest.NewIndexes(indexer, migrator)
+	// indexesRest.Init(router)
 
-	thumbService := rest.NewThumberAPI(domain.LocalThumber{})
-	thumbService.InitRoutes(router)
+	// peersRest := rest.NewPeersAPI(peers)
+	// peersRest.InitRoutes(router)
 
-	tmpdir := filepath.Join(libDir, "tmp")
-	wdav, err := wdav.NewWebDavHandler(tmpdir, backgroundImport(executor))
-	if err != nil {
-		logger.Fatal("Error initializing webdav interface", zap.Error(err))
-	}
-	router.PathPrefix("/dav/").Handler(wdav)
-	if consts.IsDevMode() && uiDir != "" {
-		router.PathPrefix("/").Handler(http.FileServer(http.Dir(uiDir)))
-	} else {
-		router.PathPrefix("/").Handler(rest.Embedder())
-	}
+	// thumbService := rest.NewThumberAPI(domain.LocalThumber{})
+	// thumbService.InitRoutes(router)
 
-	if ifs, err := net.Interfaces(); err == nil {
-		for _, intf := range ifs {
-			if addr, err := intf.Addrs(); err == nil {
-				for _, a := range addr {
-					ip, _, _ := net.ParseCIDR(a.String())
-					if ip.IsLoopback() || !ip.IsGlobalUnicast() {
-						continue
-					}
-					logger.Info("Address", zap.String("if", intf.Name),
-						zap.String("net", a.Network()),
-						zap.String("addr", a.String()),
-						zap.Bool("loopback", ip.IsLoopback()),
-						zap.Bool("global", ip.IsGlobalUnicast()))
-				}
-			}
-		}
-	}
+	// tmpdir := filepath.Join(libDir, "tmp")
+	// wdav, err := wdav.NewWebDavHandler(tmpdir, backgroundImport(executor))
+	// if err != nil {
+	// 	logger.Fatal("Error initializing webdav interface", zap.Error(err))
+	// }
+	// router.PathPrefix("/dav/").Handler(wdav)
+	// if consts.IsDevMode() && uiDir != "" {
+	// 	router.PathPrefix("/").Handler(http.FileServer(http.Dir(uiDir)))
+	// } else {
+	// 	router.PathPrefix("/").Handler(rest.Embedder())
+	// }
 
-	server := http.Server{
-		Addr:        fmt.Sprintf(":%d", port),
-		Handler:     rest.WithMiddleWares(router, "rest"),
-		BaseContext: func(l net.Listener) context.Context { return ctx },
-	}
-	go func() {
-		logger.Info("Starting HTTP server...", zap.Uint("port", port))
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Fatal("HTTP server failed", zap.Error(err))
-		}
-		logger.Info("HTTP server stopped")
-	}()
+	// if ifs, err := net.Interfaces(); err == nil {
+	// 	for _, intf := range ifs {
+	// 		if addr, err := intf.Addrs(); err == nil {
+	// 			for _, a := range addr {
+	// 				ip, _, _ := net.ParseCIDR(a.String())
+	// 				if ip.IsLoopback() || !ip.IsGlobalUnicast() {
+	// 					continue
+	// 				}
+	// 				logger.Info("Address", zap.String("if", intf.Name),
+	// 					zap.String("net", a.Network()),
+	// 					zap.String("addr", a.String()),
+	// 					zap.Bool("loopback", ip.IsLoopback()),
+	// 					zap.Bool("global", ip.IsGlobalUnicast()))
+	// 			}
+	// 		}
+	// 	}
+	// }
 
-	<-ctx.Done()
+	// server := http.Server{
+	// 	Addr:        fmt.Sprintf(":%d", port),
+	// 	Handler:     rest.WithMiddleWares(router, "rest"),
+	// 	BaseContext: func(l net.Listener) context.Context { return ctx },
+	// }
+	// go func() {
+	// 	logger.Info("Starting HTTP server...", zap.Uint("port", port))
+	// 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	// 		logger.Fatal("HTTP server failed", zap.Error(err))
+	// 	}
+	// 	logger.Info("HTTP server stopped")
+	// }()
 
-	logger.Info("Stopping server...")
+	// <-ctx.Done()
 
-	peers.Shutdown()
+	// logger.Info("Stopping server...")
 
-	ctxShutdown, cancelServerShutdown := context.WithTimeout(ctx, 5*time.Second)
-	defer func() {
-		cancelServerShutdown()
-	}()
-	if err := server.Shutdown(ctxShutdown); err != nil {
-		logger.Error("Failed to shutdown HTTP server", zap.Error(err))
-	}
+	// peers.Shutdown()
 
-	logger.Info("Terminated gracefully")
+	// ctxShutdown, cancelServerShutdown := context.WithTimeout(ctx, 5*time.Second)
+	// defer func() {
+	// 	cancelServerShutdown()
+	// }()
+	// if err := server.Shutdown(ctxShutdown); err != nil {
+	// 	logger.Error("Failed to shutdown HTTP server", zap.Error(err))
+	// }
+
+	// logger.Info("Terminated gracefully")
 }
 
 func launchStartupTasks(ctx context.Context, tasksRepo *tasks.TaskRepository, executor tasks.TaskExecutor) {
@@ -315,7 +304,7 @@ func backgroundImport(executor tasks.TaskExecutor) wdav.UploadedFunc {
 	}
 }
 
-func addRemoteThumber(self string, thumbers *domain.Thumbers) swarm.PeerHandler {
+func addRemoteThumber(self swarm.InstanceID, thumbers *domain.Thumbers) swarm.PeerHandler {
 	return func(ctx context.Context, peer swarm.Peer) {
 		if self == peer.ID {
 			// Do not add ourselves as remote thumber
