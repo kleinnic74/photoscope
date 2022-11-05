@@ -56,8 +56,11 @@ func (t *serialTaskExecutor) DrainTasks(ctx context.Context, completed Completio
 	for i := 0; i < 5; i++ {
 		wg.Add(1)
 		go func(id int) {
-			defer wg.Done()
 			log := logger.Named(fmt.Sprintf("Worker-%d", id))
+			defer func() {
+				wg.Done()
+				log.Info("Terminated")
+			}()
 			for e := range taskCh {
 				log.Info("Executing task", zap.Uint64("taskID", uint64(e.ID)))
 				_, taskCtx := logging.FromWithNameAndFields(ctx, "task", zap.Uint64("taskID", uint64(e.ID)))
@@ -69,18 +72,21 @@ func (t *serialTaskExecutor) DrainTasks(ctx context.Context, completed Completio
 				}
 				resCh <- e
 			}
-			log.Info("Terminating")
 		}(i)
 	}
 	defer func() {
 		close(taskCh)
-		for s := range t.submitCh {
-			close(s.exec)
-		}
+		wg.Add(1)
+		go func() {
+			for s := range t.submitCh {
+				close(s.exec)
+			}
+			for q := range t.queryCh {
+				close(q)
+			}
+			wg.Done()
+		}()
 		close(t.submitCh)
-		for q := range t.queryCh {
-			close(q)
-		}
 		close(t.queryCh)
 		wg.Wait()
 	}()

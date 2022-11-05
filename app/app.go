@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"bitbucket.org/kleinnic74/photos/classification"
@@ -239,31 +240,59 @@ func NewApp(ctx context.Context, o Options) (a *App, err error) {
 }
 
 func (a *App) Run(ctx context.Context) {
-	go a.bus.Dispatch(ctx)
-	go a.executor.DrainTasks(ctx, func(e tasks.Execution) {
-		a.bus.Publish(events.Event{Name: "tasks", Action: "completed"})
-	})
-	go launchStartupTasks(ctx, a.taskRepo, a.executor)
-	go a.peers.ListenAndServe(ctx)
+	logger, ctx := logging.SubFrom(ctx, "app")
 
-	var logger *zap.Logger
-	logger, ctx = logging.SubFrom(ctx, "app")
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		logger, ctx := logging.SubFrom(ctx, "eventbus")
+		a.bus.Dispatch(ctx)
+		logger.Info("DONE")
+		wg.Done()
+	}()
+	wg.Add(1)
+	go func() {
+		logger, ctx := logging.SubFrom(ctx, "tasks")
+		a.executor.DrainTasks(ctx, func(e tasks.Execution) {
+			a.bus.Publish(events.Event{Name: "tasks", Action: "completed"})
+		})
+		logger.Info("DONE")
+		wg.Done()
+	}()
+	wg.Add(1)
+	go func() {
+		logger, ctx := logging.SubFrom(ctx, "startuptasks")
+		launchStartupTasks(ctx, a.taskRepo, a.executor)
+		logger.Info("DONE")
+		wg.Done()
+	}()
+	wg.Add(1)
+	go func() {
+		logger, ctx := logging.SubFrom(ctx, "swarm")
+		a.peers.ListenAndServe(ctx)
+		logger.Info("DONE")
+		wg.Done()
+	}()
+
 	server := http.Server{
 		Addr:        a.addr,
 		Handler:     rest.WithMiddleWares(a.router, "rest"),
 		BaseContext: func(l net.Listener) context.Context { return ctx },
 	}
+	wg.Add(1)
 	go func() {
+		logger, _ := logging.SubFrom(ctx, "http")
 		logger.Info("Starting HTTP server...", zap.String("bindAddr", a.addr))
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Fatal("HTTP server failed", zap.Error(err))
 		}
-		logger.Info("HTTP server stopped")
+		logger.Info("DONE")
+		wg.Done()
 	}()
 
 	<-ctx.Done()
 
-	logger.Info("Stopping server...")
+	logger.Info("Stopping...")
 
 	a.peers.Shutdown()
 
@@ -274,6 +303,8 @@ func (a *App) Run(ctx context.Context) {
 	if err := server.Shutdown(ctxShutdown); err != nil {
 		logger.Error("Failed to shutdown HTTP server", zap.Error(err))
 	}
+
+	wg.Wait()
 
 	logger.Info("Terminated gracefully")
 
