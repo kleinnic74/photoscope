@@ -11,7 +11,7 @@ require (
 	github.com/grandcat/zeroconf v1.0.0
 	github.com/h2non/filetype v1.1.0
 	github.com/kleinnic74/fflags v0.0.0-20210607213642-eaff31240b59
-	github.com/prometheus/client_golang v1.11.0
+	github.com/prometheus/client_golang v1.11.1
 	github.com/reusee/mmh3 v0.0.0-20140820141314-64b85163255b
 	github.com/rwcarlsen/goexif v0.0.0-20190401172101-9e8deecbddbd
 	github.com/stretchr/testify v1.7.0
