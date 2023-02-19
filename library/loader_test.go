@@ -41,7 +41,7 @@ func TestLoadFromSeekableReader(t *testing.T) {
 	}
 	for i, d := range data {
 		t.Run(fmt.Sprintf("#%d %s", i, d.Name), func(t *testing.T) {
-			tmpdir, err := os.MkdirTemp("", "test-photoscope-*")
+			tmpdir, err := os.MkdirTemp(".", "test-photoscope-*")
 			if err != nil {
 				t.Fatalf("Failed to initialize loader: %s", err)
 			}
