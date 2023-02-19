@@ -18,7 +18,8 @@ type PhotoData struct {
 func TestNewPhoto(t *testing.T) {
 	var data = []PhotoData{
 		{"testdata/orientation/portrait_3.jpg", "portrait_3", "jpg", fileModificationTime("testdata/orientation/portrait_3.jpg")},
-		{"testdata/Canon_40D.jpg", "Canon_40D", "jpg", "2008-05-30T15:56:01+02:00"},
+		// The following image does not have time zone information, using local zone
+		{"testdata/Canon_40D.jpg", "Canon_40D", "jpg", localTime("2008-05-30T15:56:01")},
 	}
 	for _, p := range data {
 		act, err := photos.NewPhoto(p.Path)
@@ -53,4 +54,10 @@ func at(t string) time.Time {
 func fileModificationTime(path string) string {
 	info, _ := os.Stat(path)
 	return info.ModTime().Format(time.RFC3339)
+}
+
+func localTime(ts string) string {
+	t, _ := time.ParseInLocation("2006-01-02T15:04:05", ts, time.Local)
+	t = t.Local()
+	return t.Format("2006-01-02T15:04:05Z07:00")
 }

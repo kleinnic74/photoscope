@@ -1,0 +1,15 @@
+name: Build photoscope
+run-name: ${{ github.actor }} is building photoscope
+on: [push]
+jobs:
+  Build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.19
+      - name: Build
+        run: make all

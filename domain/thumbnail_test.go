@@ -50,7 +50,7 @@ func TestCreateThumb(t *testing.T) {
 		{"testdata/orientation/landscape_7.jpg", "testdata/orientation/landscape_7_thumb.jpg", image.Rect(0, 0, Medium.width, 284)},
 	}
 	base := "testdata/out"
-	if err := os.MkdirAll(base, 0666); err != nil {
+	if err := os.MkdirAll(base, 0777); err != nil {
 		t.Errorf("Failed to create directory %s: %s", base, err)
 	}
 	for _, d := range data {

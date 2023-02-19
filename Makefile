@@ -75,7 +75,9 @@ build: $(BINARIES)
 
 .PHONY: test
 test: $(GOBIN)/go-test-report
-	go test -json ./... | $(GOBIN)/go-test-report -o $(TMPDIR)/test_report.html
+	go test ./...
+#	go test -json ./... >$(TMPDIR)/Test-Results.json
+#	cat $(TMPDIR)/Test-Results.json | $(GOBIN)/go-test-report -o $(TMPDIR)/test_report.html
 
 .PHONY: clean
 clean:
