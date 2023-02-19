@@ -8,7 +8,7 @@ Content-Type: application/json
     "type": "importDir",
     "parameters": {
         "dryrun": false,
-        "importdir":"C:\\Users\\nclkl\\go\\src\\bitbucket.org\\kleinnic74\\photos\\testdata"
+        "importdir":"/Users/nico/Pictures/Testdata"
     }
 }
 

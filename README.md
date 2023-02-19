@@ -23,7 +23,8 @@ Current Phase: early prototypes
     * directory - DONE
   * extract time and location meta-data - DONE
   * reverse geo-code location - DONE
-  * index by time, by location
+  * index by time - DONE
+  * index by location - Needs rework, uses OSM does not work anymore
 * HTML browser
     * browse index - DONE
         * thumbs not taking rotation into account
