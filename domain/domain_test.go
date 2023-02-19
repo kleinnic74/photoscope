@@ -59,5 +59,5 @@ func fileModificationTime(path string) string {
 func localTime(ts string) string {
 	t, _ := time.ParseInLocation("2006-01-02T15:04:05", ts, time.Local)
 	t = t.Local()
-	return t.Format("2006-01-02T15:04:05-07:00")
+	return t.Format("2006-01-02T15:04:05Z07:00")
 }
