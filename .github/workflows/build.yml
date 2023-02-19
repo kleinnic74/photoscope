@@ -14,7 +14,7 @@ jobs:
       - name: Build
         run: make all
       - name: Publish test results
-        uses: actions/upload-artifacts@v3
+        uses: actions/upload-artifact@v3
         with:
           name: Go-test-results
           path: tmp/Test-Results.json
